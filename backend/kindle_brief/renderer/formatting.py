@@ -10,6 +10,25 @@ def local_datetime(value: datetime, timezone: str) -> datetime:
     return value.astimezone(ZoneInfo(timezone))
 
 
+def is_night(
+    value: datetime,
+    timezone: str,
+    *,
+    sunrise: datetime | None = None,
+    sunset: datetime | None = None,
+) -> bool:
+    """Return whether ``value`` falls outside the local daylight window."""
+    local = local_datetime(value, timezone)
+    if sunrise is not None and sunset is not None:
+        local_sunrise = local_datetime(sunrise, timezone)
+        local_sunset = local_datetime(sunset, timezone)
+        local_minutes = local.hour * 60 + local.minute
+        sunrise_minutes = local_sunrise.hour * 60 + local_sunrise.minute
+        sunset_minutes = local_sunset.hour * 60 + local_sunset.minute
+        return local_minutes < sunrise_minutes or local_minutes >= sunset_minutes
+    return local.hour < 6 or local.hour >= 19
+
+
 def header_text(snapshot: DashboardSnapshot) -> str:
     local = local_datetime(snapshot.generated_at, snapshot.timezone)
     date_time = f"{local:%a} {local.day} {local:%b %Y} · {local:%H:%M}"

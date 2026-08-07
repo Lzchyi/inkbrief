@@ -133,22 +133,14 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
 
     standings_top = y + scaled(30, width)
     half = width // 2
-    icons.helmet(
-        canvas.draw,
-        (margin, standings_top, margin + scaled(48, width), standings_top + scaled(48, width)),
-        ink=INK,
-        width=scaled(3, width),
+    standings_icon_size = scaled(54, width)
+    canvas.paste(
+        icons.motorsport_asset("helmet-compact", standings_icon_size),
+        (margin, standings_top),
     )
-    icons.car(
-        canvas.draw,
-        (
-            half + scaled(12, width),
-            standings_top,
-            half + scaled(64, width),
-            standings_top + scaled(48, width),
-        ),
-        ink=INK,
-        width=scaled(3, width),
+    canvas.paste(
+        icons.motorsport_asset("car-compact", standings_icon_size),
+        (half + scaled(12, width), standings_top),
     )
     for index, standing in enumerate(f1.driver_standings[:3]):
         row_y = standings_top + scaled(64 + index * 48, width)

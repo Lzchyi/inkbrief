@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from kindle_brief.models import DashboardSnapshot
 from kindle_brief.renderer import icons
-from kindle_brief.renderer.formatting import clock, next_session, percentage, temperature
+from kindle_brief.renderer.formatting import clock, is_night, next_session, percentage, temperature
 from kindle_brief.renderer.moon import moon_phase_image
 from kindle_brief.renderer.theme import INK, SECONDARY, font, scaled
 
@@ -18,20 +18,24 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
         canvas.text((margin, y + scaled(55, width)), "Weather unavailable", size=42)
         y += scaled(290, width)
     else:
-        icon_box = (
-            margin + scaled(18, width),
-            y + scaled(24, width),
-            margin + scaled(275, width),
-            y + scaled(270, width),
+        astronomy = snapshot.astronomy
+        icon_size = scaled(250, width)
+        weather_icon = icons.weather_asset(
+            weather.condition_code,
+            icon_size,
+            is_night=is_night(
+                snapshot.generated_at,
+                snapshot.timezone,
+                sunrise=astronomy.sunrise if astronomy else None,
+                sunset=astronomy.sunset if astronomy else None,
+            ),
+            wind_kph=weather.wind_kph,
+            visibility_km=weather.visibility_km,
+            cloud_cover_pct=weather.cloud_cover_pct,
         )
-        code = int(weather.condition_code) if weather.condition_code.isdigit() else 3
-        icons.cloud(
-            canvas.draw,
-            icon_box,
-            ink=INK,
-            width=scaled(6, width),
-            rain=code >= 51,
-            sun=code <= 2,
+        canvas.paste(
+            weather_icon,
+            (margin + scaled(18, width), y + scaled(20, width)),
         )
         details_x = scaled(415, width)
         canvas.text(
@@ -123,13 +127,8 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
                 fill=SECONDARY,
             )
         rows_y = f1_top + scaled(140, width)
-        icon_size = scaled(46, width)
-        icons.helmet(
-            canvas.draw,
-            (margin, rows_y, margin + icon_size, rows_y + icon_size),
-            ink=INK,
-            width=scaled(3, width),
-        )
+        icon_size = scaled(54, width)
+        canvas.paste(icons.motorsport_asset("helmet-compact", icon_size), (margin, rows_y))
         driver_text = "   ·   ".join(
             f"{standing.code} {standing.points:g}" for standing in f1.driver_standings[:3]
         )
@@ -137,12 +136,7 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
             (margin + scaled(70, width), rows_y + scaled(4, width)), driver_text or "—", size=22
         )
         rows_y += scaled(60, width)
-        icons.car(
-            canvas.draw,
-            (margin, rows_y, margin + icon_size, rows_y + icon_size),
-            ink=INK,
-            width=scaled(3, width),
-        )
+        canvas.paste(icons.motorsport_asset("car-compact", icon_size), (margin, rows_y))
         constructor_text = "   ·   ".join(
             f"{standing.code} {standing.points:g}" for standing in f1.constructor_standings[:3]
         )

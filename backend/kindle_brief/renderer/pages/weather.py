@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from kindle_brief.models import DashboardSnapshot
 from kindle_brief.renderer import icons
-from kindle_brief.renderer.formatting import clock, percentage, temperature
+from kindle_brief.renderer.formatting import clock, is_night, percentage, temperature
 from kindle_brief.renderer.moon import moon_phase_image
-from kindle_brief.renderer.theme import INK, MUTED, PANEL, SECONDARY, scaled
+from kindle_brief.renderer.theme import MUTED, PANEL, SECONDARY, scaled
 
 from .common import footer, label, metric, page_canvas
 
@@ -22,19 +22,22 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
         return canvas
 
     label(canvas, margin, y, snapshot.location_name)
-    code = int(weather.condition_code) if weather.condition_code.isdigit() else 3
-    icons.cloud(
-        canvas.draw,
-        (
-            margin,
-            y + scaled(42, width),
-            margin + scaled(220, width),
-            y + scaled(240, width),
+    hero_icon_size = scaled(220, width)
+    canvas.paste(
+        icons.weather_asset(
+            weather.condition_code,
+            hero_icon_size,
+            is_night=is_night(
+                snapshot.generated_at,
+                snapshot.timezone,
+                sunrise=astronomy.sunrise if astronomy else None,
+                sunset=astronomy.sunset if astronomy else None,
+            ),
+            wind_kph=weather.wind_kph,
+            visibility_km=weather.visibility_km,
+            cloud_cover_pct=weather.cloud_cover_pct,
         ),
-        ink=INK,
-        width=scaled(5, width),
-        rain=code >= 51,
-        sun=code <= 2,
+        (margin, y + scaled(32, width)),
     )
     canvas.text(
         (scaled(330, width), y + scaled(16, width)), temperature(weather.temperature_c), size=86
@@ -110,19 +113,20 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
             fill=MUTED,
             anchor="ma",
         )
-        small_code = int(item.condition_code) if item.condition_code.isdigit() else 3
-        icons.cloud(
-            canvas.draw,
-            (
-                round(cx - scaled(31, width)),
-                hour_top + scaled(37, width),
-                round(cx + scaled(31, width)),
-                hour_top + scaled(93, width),
+        hourly_icon_size = scaled(66, width)
+        canvas.paste(
+            icons.weather_asset(
+                item.condition_code,
+                hourly_icon_size,
+                is_night=is_night(
+                    item.timestamp,
+                    snapshot.timezone,
+                    sunrise=astronomy.sunrise if astronomy else None,
+                    sunset=astronomy.sunset if astronomy else None,
+                ),
+                cloud_cover_pct=item.cloud_cover_pct,
             ),
-            ink=INK,
-            width=scaled(2, width),
-            rain=small_code >= 51,
-            sun=small_code <= 2,
+            (round(cx - hourly_icon_size / 2), hour_top + scaled(32, width)),
         )
         canvas.text(
             (cx, hour_top + scaled(105, width)),

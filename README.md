@@ -6,10 +6,10 @@ KT5, on firmware 5.19.2.0.1**. It generates five 1072×1448 PNG pages on a
 normal Python host, publishes content-addressed releases, and displays them on
 a jailbroken Kindle through KUAL and FBInk.
 
-The dashboard is optional and manual. It does not replace the stock launcher,
-install a boot hook, write books, or add anything to the Kindle Library. A
-visible **HOME** target, a corner-hold failsafe, a runtime limit, and a KUAL
-stop action all return to the stock interface.
+The dashboard is optional and launched manually. It does not replace the stock
+launcher, install a boot hook, write books, or add anything to the Kindle
+Library. A visible **HOME** target, a corner-hold failsafe, a runtime limit, and
+a KUAL stop action all return to the stock interface.
 
 > [!CAUTION]
 > Jailbreaking is a separate, physical operation with real device risk. The
@@ -33,13 +33,15 @@ flowchart LR
     Sky["Local astronomy and lunar date"] --> Actions
     Actions --> Pipeline["Normalize, filter, rank, and render"]
     Pipeline --> Host["Static HTTPS hosting"]
-    Host -->|"manual checksummed update"| Kindle["Kindle Brief"]
+    Host -->|"launch-time or manual checksummed update"| Kindle["Kindle Brief"]
     Kindle <-->|"HOME and failsafe return"| Library["Stock Library and reader"]
 ```
 
-The host performs all networking and rendering. The Kindle downloads only a
-verified five-page bitmap release after an explicit KUAL action; the stock
-Library remains the primary interface.
+The host performs all source collection and rendering. Each configured manual
+Dashboard launch checks for a verified five-page bitmap release and falls back
+to the last verified or bundled pages when offline; KUAL also keeps a separate
+manual update action. Nothing runs at boot or on a device-side schedule, and
+the stock Library remains the primary interface.
 
 The bundled demo renders without network access or API keys:
 
@@ -90,6 +92,7 @@ markers; it does not remove the jailbreak.
 - [Architecture](docs/architecture.md)
 - [Configuration](docs/configuration.md)
 - [Data sources and attribution](docs/data-sources.md)
+- [Verified Formula 1 2026 calendar and circuits](docs/f1-2026.md)
 - [AI quick guide](docs/ai.md)
 - [AI providers](docs/ai-providers.md)
 - [Rendering and release format](docs/rendering.md)
@@ -103,5 +106,7 @@ markers; it does not remove the jailbreak.
 - [Privacy and security](docs/privacy-security.md)
 - [Validation](docs/validation.md)
 
-Kindle Brief is MIT-licensed. Bundled fonts and track geometry retain their
-own licenses and attribution files under `assets/`.
+Kindle Brief code and project-original assets are MIT-licensed. Bundled fonts
+and track geometry retain their own terms under `assets/`; project-authorized
+raster derivatives have a provenance record in `assets/PROVENANCE.md` without
+asserting a third-party licence.

@@ -44,11 +44,15 @@ package: this release intentionally has no published KPM ID or manifest.
 ```sh
 make validate
 make preview
-make package-kindle
+KINDLE_BRIEF_BASE_URL=https://OWNER.github.io/REPOSITORY make package-kindle
 ```
 
 This produces a checksummed local package from the five rendered pages. It
-does not touch the Kindle.
+does not touch the Kindle. `KINDLE_BRIEF_BASE_URL` is optional; when present it
+must be a public HTTPS release root and is packaged as `config/base-url` after
+validation. Omit it to install only the bundled pages and configure the
+endpoint later. An existing installed endpoint is preserved across reinstalls
+and upgrades.
 
 ## Explicit install gate
 
@@ -69,9 +73,10 @@ It does not write books, Calibre metadata, the Library database, or a boot hook.
 
 ## First-run acceptance
 
-After a clean eject, verify KUAL Dashboard diagnostics, all five pages, both
-swipe directions, top-left HOME, the three-second top-right failsafe, timeout,
-manual update, stock Library return, an existing book, and Calibre reconnection.
+After a clean eject, verify the best-effort launch update and cached fallback,
+KUAL Dashboard diagnostics, all five pages, both swipe directions, top-left
+HOME, the three-second top-right failsafe, timeout, manual update, stock Library
+return, an existing book, and Calibre reconnection.
 Physical KT5 touch orientation and the stock-Home transition remain acceptance
 gates until actually observed.
 

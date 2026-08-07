@@ -39,7 +39,8 @@ They disappear at reboot and do not modify the book library. Useful checks:
   unverified binary.
 - `Update: not-configured`: create the project-owned HTTPS `config/base-url`.
 - Update download/checksum error: leave the current cache in place, verify the
-  Pages URL and deployment, then retry manually.
+  Pages URL and deployment, then retry with **Start Dashboard** or the manual
+  update action.
 
 ## Roll back content
 

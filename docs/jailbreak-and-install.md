@@ -153,22 +153,30 @@ It does not write to `documents`, Calibre metadata, the book database, or boot
 configuration. Reinstalling an identical package is idempotent; an upgrade
 retains one owned previous application release.
 
-For remote updates, replace the installed `config/base-url.example` with a file
-named `base-url` containing one verified HTTPS Pages root. On a mounted Kindle
-that path is:
+For remote updates, either package one verified HTTPS Pages root:
+
+```sh
+KINDLE_BRIEF_BASE_URL=https://OWNER.github.io/REPOSITORY make package-kindle
+```
+
+or replace the installed `config/base-url.example` with a file named `base-url`
+containing that root. On a mounted Kindle that path is:
 
 ```text
 /Volumes/Kindle/kindle-brief/current/config/base-url
 ```
 
 Do not put credentials or query-string secrets in the URL. Eject cleanly after
-the file is saved.
+the file is saved. An existing installed `base-url` is preserved across package
+reinstalls and upgrades.
 
 ## First launch and controls
 
 Open KUAL → **Dashboard**:
 
-- **Start Dashboard** displays the bundled or last downloaded pages.
+- **Start Dashboard** attempts one configured update with a shared 20-second
+  network budget, then displays the newest verified cache or the bundled pages
+  if the update is unavailable.
 - Swipe left for the next page and right for the previous page.
 - Tap the visible top-left **HOME** target to return to the stock UI.
 - Hold the top-right corner for at least three seconds as an independent exit.
@@ -178,7 +186,8 @@ Open KUAL → **Dashboard**:
 
 The default maximum session is 30 minutes, after which the failsafe restores
 the stock Home interface. The device never performs an unattended update or
-starts the dashboard at boot.
+starts the dashboard at boot; launch updates occur only after the user selects
+**Start Dashboard**.
 
 After first launch, confirm all five pages, both swipe directions, the HOME
 target, the top-right hold, timeout/stop behavior, a KUAL update, and return to

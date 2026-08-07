@@ -44,12 +44,21 @@ the package on the device.
 
 ## Update contract
 
-Updates are manual and require `curl` with HTTPS protocol restrictions and
-bounded downloads; the updater refuses `wget` because its Kindle build cannot
-guarantee HTTPS-only redirects. `<base>/profiles/kt5/current.json` must use the
-supported schema and name `profile_id`, `model_code`, `release_id`,
-`manifest_sha256`, and `sha256sums_sha256`. The release directory must contain
-`manifest.json`, `SHA256SUMS`, and exactly these checksummed files:
+Update checks run once during each configured manual Dashboard launch and are
+also available through the explicit KUAL update action. Both paths require
+`curl` with HTTPS protocol restrictions and bounded downloads; the updater
+refuses `wget` because its Kindle build cannot guarantee HTTPS-only redirects.
+Launch checks share one 20-second network budget; the explicit manual action
+keeps the 90-second per-transfer limit. The endpoint must be one regular,
+bounded file containing a single public HTTPS root without userinfo, a query,
+or a fragment.
+`<base>/profiles/kt5/current.json` must use the supported schema and name
+`profile_id`, `model_code`, `release_id`, `manifest_sha256`, and
+`sha256sums_sha256`. A pointer matching the installed `RELEASE_ID` is a
+successful no-op only after the cached manifest, checksum sidecar, five page
+hashes, and PNG contracts are revalidated against that pointer. A new or
+locally damaged release must contain `manifest.json`, `SHA256SUMS`, and exactly
+these checksummed files:
 
 - `pages/home.png`
 - `pages/weather.png`
@@ -62,6 +71,7 @@ after schemas, release identity, hashes, page metadata, 1072×1448 dimensions,
 and 8-bit grayscale PNG encoding agree. Ordinary promotion failures and caught
 signals restore `current`. A sudden power loss or `SIGKILL` between FAT renames
 can leave only the owned `previous`; the dashboard uses it immediately and the
-next manual update renames it back to `current` before network access. After a
-successful update, the last cache remains as `previous`. A KPM package is
-intentionally deferred in `kpm/DEFERRED.md`.
+next launch or manual update renames it back to `current` before network access.
+After a successful update, the last cache remains as `previous`. No update
+runs at boot or on a background schedule. A KPM package is intentionally
+deferred in `kpm/DEFERRED.md`.

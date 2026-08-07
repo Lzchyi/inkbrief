@@ -1,3 +1,4 @@
 # Copy this file to base-url and replace the line with an HTTPS release root.
-# The Kindle never updates automatically.
+# A manual Dashboard launch checks this root; KUAL Update also uses it.
+# Nothing runs at boot or on a background device schedule.
 https://example.invalid/kindle-brief

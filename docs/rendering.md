@@ -13,8 +13,10 @@ The supported profile is:
 - Noto Sans CJK SC for Latin and Chinese glyph coverage
 
 The bundled font is licensed under SIL Open Font License 1.1; see
-`assets/fonts/OFL-1.1.txt`. Original dashboard icons are MIT-licensed under
-`assets/icons/LICENSE.md`. Circuit geometry retains its own MIT attribution in
+`assets/fonts/OFL-1.1.txt`. Original dashboard SVGs are MIT-licensed under
+`assets/icons/LICENSE.md`. Project-authorized raster icon derivatives have a
+separate source and processing record in `assets/PROVENANCE.md`; it does not
+assert a third-party licence. Circuit geometry retains its own attribution in
 `assets/tracks/`.
 
 ## Common layout contract

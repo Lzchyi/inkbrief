@@ -15,8 +15,8 @@ Ordinary promotion errors and caught termination signals restore `current`.
 FAT cannot make the two directory renames power-loss atomic: abrupt power loss
 or `SIGKILL` in that narrow window may leave the owned release only at
 `cache/previous`. Dashboard startup uses that owned fallback before bundled
-pages, Diagnostics counts it, and the next manual update restores it to
-`cache/current` before attempting a download.
+pages, Diagnostics counts it, and the next launch or manual update restores it
+to `cache/current` before attempting a download.
 
 There is no automatic rollback button for `previous`. Preserve both caches and
 fix the static deployment or base URL first. A newly verified update can replace

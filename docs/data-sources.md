@@ -15,6 +15,11 @@ dashboard beyond personal use.
 | Chinese lunar date | [lunar-python](https://github.com/6tail/lunar-python) | MIT | Calculated locally. |
 | Circuit outlines | [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) | MIT; the pinned source and attribution are in `assets/tracks/`. | Bundled at build time; no request. |
 
+The current 23-round Formula 1 baseline, official change notices, Sprint
+venues, and circuit-ID audit are recorded in [Formula 1 2026
+verification](f1-2026.md). Live pages still use Jolpica rather than treating
+that review document as a hard-coded schedule.
+
 Open-Meteo and Jolpica attribution is carried in source status metadata. The
 rendered design should retain source labels where space permits; publishing the
 underlying static metadata does not remove the requirement to credit the data

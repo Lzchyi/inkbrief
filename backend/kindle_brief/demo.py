@@ -83,17 +83,17 @@ def demo_snapshot() -> DashboardSnapshot:
         stargazing_rating="Fair",
     )
     sessions = (
-        F1Session("Practice 1", generated + timedelta(hours=10)),
-        F1Session("Sprint Qualifying", generated + timedelta(hours=17)),
-        F1Session("Sprint", generated + timedelta(days=1, hours=8)),
-        F1Session("Qualifying", generated + timedelta(days=1, hours=14)),
-        F1Session("Race", generated + timedelta(days=2, hours=13)),
+        F1Session("Practice 1", datetime(2026, 8, 21, 10, 30, tzinfo=UTC)),
+        F1Session("Sprint Qualifying", datetime(2026, 8, 21, 14, 30, tzinfo=UTC)),
+        F1Session("Sprint", datetime(2026, 8, 22, 10, 0, tzinfo=UTC)),
+        F1Session("Qualifying", datetime(2026, 8, 22, 14, 0, tzinfo=UTC)),
+        F1Session("Race", datetime(2026, 8, 23, 13, 0, tzinfo=UTC)),
     )
     f1 = F1Snapshot(
         season=2026,
-        round_number=14,
-        event_name="Belgian Grand Prix",
-        circuit_name="Circuit de Spa-Francorchamps",
+        round_number=12,
+        event_name="Dutch Grand Prix",
+        circuit_name="Circuit Park Zandvoort",
         sessions=sessions,
         driver_standings=(
             Standing(1, "NOR", "Lando Norris", 245),
@@ -106,7 +106,7 @@ def demo_snapshot() -> DashboardSnapshot:
             Standing(3, "FER", "Ferrari", 301),
         ),
         status=jolpica,
-        circuit_id="spa",
+        circuit_id="zandvoort",
     )
     categories = (
         "malaysia",

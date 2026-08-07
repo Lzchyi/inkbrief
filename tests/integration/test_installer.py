@@ -39,7 +39,12 @@ def _make_fake_mount(tmp_path: Path, name: str = "Kindle") -> Path:
     return mount
 
 
-def _make_package(tmp_path: Path, version: str) -> Path:
+def _make_package(
+    tmp_path: Path,
+    version: str,
+    *,
+    base_url: str | None = None,
+) -> Path:
     package = tmp_path / f"package-{version}"
     app = package / "payload" / "app"
     kual = package / "payload" / "kual"
@@ -52,6 +57,8 @@ def _make_package(tmp_path: Path, version: str) -> Path:
     (kual / ".kindle-brief-owned").write_text("kindle-brief-owned-v1\n", encoding="ascii")
     (app / "VERSION").write_text(f"{version}\n", encoding="ascii")
     (app / "config" / "runtime.conf").write_text("max_runtime=1800\n", encoding="ascii")
+    if base_url is not None:
+        (app / "config" / "base-url").write_text(f"{base_url}\n", encoding="ascii")
     (app / "bin" / "start.sh").write_text("#!/bin/sh\nexit 0\n", encoding="ascii")
     controller = app / "bin" / "touch-controller"
     controller.write_bytes(b"fake-armhf-controller-" + version.encode("ascii"))
@@ -124,6 +131,8 @@ output=
 limit=
 proto=
 proto_redir=
+connect_timeout=
+max_time=
 url=
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -131,11 +140,14 @@ while [ "$#" -gt 0 ]; do
         --max-filesize) limit=$2; shift 2 ;;
         --proto) proto=$2; shift 2 ;;
         --proto-redir) proto_redir=$2; shift 2 ;;
-        --connect-timeout|--max-time) shift 2 ;;
+        --connect-timeout) connect_timeout=$2; shift 2 ;;
+        --max-time) max_time=$2; shift 2 ;;
         -*) shift ;;
         *) url=$1; shift ;;
     esac
 done
+[ -z "${FAKE_CURL_LOG:-}" ] || \
+    printf '%s\t%s\t%s\n' "$url" "$connect_timeout" "$max_time" >> "$FAKE_CURL_LOG"
 [ "$proto" = '=https' ] && [ "$proto_redir" = '=https' ] || exit 92
 relative=${url#https://updates.example.test/}
 [ -n "$output" ] && [ "$relative" != "$url" ] || exit 2
@@ -172,13 +184,39 @@ exec /usr/bin/sha256sum "$@"
     return app_root, environment, fake_bin
 
 
-def _run_update(app_root: Path, environment: dict[str, str]) -> subprocess.CompletedProcess[str]:
+def _run_update(
+    app_root: Path,
+    environment: dict[str, str],
+    *arguments: str,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["/bin/sh", str(app_root / "bin" / "update.sh")],
+        ["/bin/sh", str(app_root / "bin" / "update.sh"), *arguments],
         capture_output=True,
         text=True,
         env=environment,
     )
+
+
+def _install_fake_date(fake_bin: Path) -> None:
+    fake_date = fake_bin / "date"
+    fake_date.write_text(
+        """#!/bin/sh
+[ "${1:-}" = '+%s' ] || exit 2
+count=0
+if [ -r "$FAKE_DATE_COUNT" ]; then
+    IFS= read -r count < "$FAKE_DATE_COUNT" || count=0
+fi
+count=$((count + 1))
+printf '%s\n' "$count" > "$FAKE_DATE_COUNT"
+if [ "$count" -eq 1 ]; then
+    printf '%s\n' "$FAKE_DATE_START"
+else
+    printf '%s\n' "$FAKE_DATE_NETWORK"
+fi
+""",
+        encoding="ascii",
+    )
+    fake_date.chmod(0o755)
 
 
 def _rewrite_release_metadata(
@@ -204,8 +242,15 @@ def _rewrite_release_metadata(
     )
 
 
-def test_real_packager_output_installs_on_fake_mount(tmp_path: Path) -> None:
+def test_real_packager_output_installs_on_fake_mount(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     package = tmp_path / "kindle-brief-integration"
+    monkeypatch.setenv(
+        "KINDLE_BRIEF_BASE_URL",
+        "https://updates.example.test/kindle-brief/",
+    )
     packaged = _run(PACKAGE_SCRIPT, package)
     assert packaged.returncode == 0, packaged.stderr
     assert package.is_dir()
@@ -216,12 +261,42 @@ def test_real_packager_output_installs_on_fake_mount(tmp_path: Path) -> None:
         ["file", str(package / "payload" / "app" / "bin" / "touch-controller")],
         text=True,
     )
+    assert (package / "payload" / "app" / "config" / "base-url").read_text(
+        encoding="ascii"
+    ) == "https://updates.example.test/kindle-brief\n"
 
     mount = _make_fake_mount(tmp_path, "Packaged Kindle")
     installed = _install(mount, package)
     assert installed.returncode == 0, installed.stderr
     assert (mount / "kindle-brief" / "current" / "pages" / "home.png").is_file()
+    assert (mount / "kindle-brief" / "current" / "config" / "base-url").read_text(
+        encoding="ascii"
+    ) == "https://updates.example.test/kindle-brief\n"
     assert (mount / "extensions" / "Dashboard" / "menu.json").is_file()
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    (
+        "http://updates.example.test",
+        "https://user:secret@updates.example.test",
+        "https://updates.example.test/root?token=secret",
+        "https://updates.example.test/root\nsecond-line",
+    ),
+)
+def test_real_packager_rejects_unsafe_base_url_before_writing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    base_url: str,
+) -> None:
+    package = tmp_path / "kindle-brief-invalid-url"
+    monkeypatch.setenv("KINDLE_BRIEF_BASE_URL", base_url)
+
+    packaged = _run(PACKAGE_SCRIPT, package)
+
+    assert packaged.returncode != 0
+    assert "KINDLE_BRIEF_BASE_URL" in packaged.stderr
+    assert not package.exists()
 
 
 def test_backup_verifier_is_read_only_and_excludes_only_regenerated_caches(
@@ -405,6 +480,158 @@ exec /bin/mv "$@"
     assert not list(cache_root.glob(".stage-*"))
 
 
+def test_update_is_a_successful_noop_when_release_is_already_current(
+    tmp_path: Path,
+) -> None:
+    public = tmp_path / "public"
+    profile = DeviceProfile("kt5", "Kindle", 1072, 1448, model_code="KT5")
+    release = build_release(demo_snapshot(), profile, public)
+    app_root, environment, _ = _make_update_harness(tmp_path, public)
+    installed = _run_update(app_root, environment)
+    assert installed.returncode == 0, installed.stderr
+
+    pointer_only = tmp_path / "pointer-only" / "profiles" / "kt5"
+    pointer_only.mkdir(parents=True)
+    shutil.copy2(public / "profiles" / "kt5" / "current.json", pointer_only)
+    environment["FAKE_RELEASE_ROOT"] = str(tmp_path / "pointer-only")
+
+    repeated = _run_update(app_root, environment)
+
+    assert repeated.returncode == 0, repeated.stderr
+    assert "Dashboard is already current" in repeated.stderr
+    assert (app_root / "cache" / "current" / "RELEASE_ID").read_text(
+        encoding="ascii"
+    ).strip() == release.release_id
+    assert not (app_root / "cache" / "previous").exists()
+    assert not list((app_root / "cache").glob(".stage-*"))
+
+
+def test_update_repairs_damaged_cache_with_matching_release_id(tmp_path: Path) -> None:
+    public = tmp_path / "public"
+    profile = DeviceProfile("kt5", "Kindle", 1072, 1448, model_code="KT5")
+    release = build_release(demo_snapshot(), profile, public)
+    app_root, environment, _ = _make_update_harness(tmp_path, public)
+    installed = _run_update(app_root, environment)
+    assert installed.returncode == 0, installed.stderr
+
+    cache_root = app_root / "cache"
+    cached_home = cache_root / "current" / "pages" / "home.png"
+    cached_home.write_bytes(b"damaged-cache-page")
+
+    repaired = _run_update(app_root, environment)
+
+    release_home = (
+        public / "profiles" / "kt5" / "releases" / release.release_id / "pages" / "home.png"
+    )
+    assert repaired.returncode == 0, repaired.stderr
+    assert "Dashboard update installed" in repaired.stderr
+    assert cached_home.read_bytes() == release_home.read_bytes()
+    assert (cache_root / "previous" / "pages" / "home.png").read_bytes() == (b"damaged-cache-page")
+
+
+def test_launch_update_shares_deadline_while_manual_keeps_long_timeout(
+    tmp_path: Path,
+) -> None:
+    public = tmp_path / "public"
+    profile = DeviceProfile("kt5", "Kindle", 1072, 1448, model_code="KT5")
+    build_release(demo_snapshot(), profile, public)
+    app_root, environment, fake_bin = _make_update_harness(tmp_path, public)
+    curl_log = tmp_path / "curl.log"
+    environment["FAKE_CURL_LOG"] = str(curl_log)
+
+    installed = _run_update(app_root, environment)
+
+    assert installed.returncode == 0, installed.stderr
+    manual_calls = [line.split("\t") for line in curl_log.read_text().splitlines()]
+    assert len(manual_calls) == 8
+    assert all(call[1:] == ["15", "90"] for call in manual_calls)
+
+    curl_log.unlink()
+    _install_fake_date(fake_bin)
+    environment.update(
+        {
+            "FAKE_DATE_COUNT": str(tmp_path / "date-count"),
+            "FAKE_DATE_START": "100",
+            "FAKE_DATE_NETWORK": "105",
+        }
+    )
+
+    repeated = _run_update(app_root, environment, "--launch")
+
+    assert repeated.returncode == 0, repeated.stderr
+    assert "Dashboard is already current" in repeated.stderr
+    launch_calls = [line.split("\t") for line in curl_log.read_text().splitlines()]
+    assert len(launch_calls) == 1
+    assert launch_calls[0][1:] == ["15", "15"]
+
+
+def test_launch_update_stops_before_network_when_deadline_is_exhausted(
+    tmp_path: Path,
+) -> None:
+    public = tmp_path / "public"
+    app_root, environment, fake_bin = _make_update_harness(tmp_path, public)
+    _install_fake_date(fake_bin)
+    curl_log = tmp_path / "curl.log"
+    environment.update(
+        {
+            "FAKE_CURL_LOG": str(curl_log),
+            "FAKE_DATE_COUNT": str(tmp_path / "date-count"),
+            "FAKE_DATE_START": "100",
+            "FAKE_DATE_NETWORK": "121",
+        }
+    )
+
+    expired = _run_update(app_root, environment, "--launch")
+
+    assert expired.returncode == 4
+    assert "Could not download bounded update pointer" in expired.stderr
+    assert not curl_log.exists()
+    assert not list((app_root / "cache").glob(".stage-*"))
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    (
+        "http://updates.example.test",
+        "https://",
+        "https://user:secret@updates.example.test",
+        "https://updates.example.test/root?token=secret",
+        "https://updates.example.test/root#fragment",
+        "https://updates.example.test\nhttps://second.example.test",
+        "https://" + "a" * 4090,
+    ),
+)
+def test_update_rejects_unsafe_endpoint_before_curl(
+    tmp_path: Path,
+    endpoint: str,
+) -> None:
+    app_root, environment, _ = _make_update_harness(tmp_path, tmp_path / "public")
+    (app_root / "config" / "base-url").write_text(endpoint, encoding="ascii")
+    curl_log = tmp_path / "curl.log"
+    environment["FAKE_CURL_LOG"] = str(curl_log)
+
+    rejected = _run_update(app_root, environment)
+
+    assert rejected.returncode == 2
+    assert not curl_log.exists()
+
+
+def test_update_rejects_symlink_endpoint_before_curl(tmp_path: Path) -> None:
+    app_root, environment, _ = _make_update_harness(tmp_path, tmp_path / "public")
+    endpoint = app_root / "config" / "base-url"
+    endpoint.unlink()
+    target = tmp_path / "endpoint-target"
+    target.write_text("https://updates.example.test\n", encoding="ascii")
+    endpoint.symlink_to(target)
+    curl_log = tmp_path / "curl.log"
+    environment["FAKE_CURL_LOG"] = str(curl_log)
+
+    rejected = _run_update(app_root, environment)
+
+    assert rejected.returncode == 2
+    assert not curl_log.exists()
+
+
 def test_update_recovers_owned_previous_before_network_failure(tmp_path: Path) -> None:
     public = tmp_path / "public"
     profile = DeviceProfile("kt5", "Kindle", 1072, 1448, model_code="KT5")
@@ -485,6 +712,55 @@ def test_dashboard_and_diagnostics_fall_back_to_owned_previous_cache(tmp_path: P
     )
     assert diagnostics.returncode == 0, diagnostics.stderr
     assert "Pages: 5/5" in diagnostics.stdout
+
+
+def test_start_uses_cached_dashboard_when_launch_update_fails(tmp_path: Path) -> None:
+    app_root = tmp_path / "runtime-app"
+    bin_dir = app_root / "bin"
+    config_dir = app_root / "config"
+    bin_dir.mkdir(parents=True)
+    config_dir.mkdir()
+    for script in ("common.sh", "start.sh"):
+        shutil.copy2(REPO_ROOT / "kindle" / "launcher" / script, bin_dir / script)
+    (config_dir / "base-url").write_text(
+        "https://updates.example.test\n",
+        encoding="ascii",
+    )
+    (bin_dir / "update.sh").write_text(
+        '#!/bin/sh\nprintf \'update:%s\\n\' "$*" >> "$START_EVENTS"\nexit 9\n',
+        encoding="ascii",
+    )
+    (bin_dir / "dashboard.sh").write_text(
+        "#!/bin/sh\nprintf '%s\\n' dashboard >> \"$START_EVENTS\"\nsleep 2\n",
+        encoding="ascii",
+    )
+    events = tmp_path / "start-events"
+    state_dir = tmp_path / "runtime-state"
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "KINDLE_BRIEF_ROOT": str(app_root),
+            "KINDLE_BRIEF_STATE_DIR": str(state_dir),
+            "START_EVENTS": str(events),
+        }
+    )
+
+    started = subprocess.run(
+        ["/bin/sh", str(bin_dir / "start.sh")],
+        capture_output=True,
+        text=True,
+        env=environment,
+        timeout=5,
+    )
+
+    assert started.returncode == 0, started.stderr
+    assert events.read_text(encoding="ascii").splitlines()[:2] == [
+        "update:--launch",
+        "dashboard",
+    ]
+    assert "Launch update failed; using cached dashboard pages" in (
+        state_dir / "dashboard.log"
+    ).read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(
@@ -582,7 +858,7 @@ def test_update_refuses_wget_without_invoking_it(tmp_path: Path) -> None:
         encoding="ascii",
     )
     (fake_bin / "wget").chmod(0o755)
-    for command in ("dirname", "mkdir", "rm"):
+    for command in ("awk", "dirname", "mkdir", "rm", "tr", "wc"):
         executable = shutil.which(command)
         assert executable is not None
         (fake_bin / command).symlink_to(executable)
@@ -599,8 +875,16 @@ def test_update_refuses_wget_without_invoking_it(tmp_path: Path) -> None:
 
 def test_install_is_scoped_idempotent_and_keeps_previous_release(tmp_path: Path) -> None:
     mount = _make_fake_mount(tmp_path)
-    first_package = _make_package(tmp_path, "0.1.0")
-    second_package = _make_package(tmp_path, "0.2.0")
+    first_package = _make_package(
+        tmp_path,
+        "0.1.0",
+        base_url="https://packaged-one.example.test",
+    )
+    second_package = _make_package(
+        tmp_path,
+        "0.2.0",
+        base_url="https://packaged-two.example.test",
+    )
     book_before = (mount / "documents" / "existing-book.azw3").read_bytes()
     calibre_before = (mount / "metadata.calibre").read_bytes()
 
@@ -614,6 +898,7 @@ def test_install_is_scoped_idempotent_and_keeps_previous_release(tmp_path: Path)
     assert not (mount / "kindle-brief" / "previous").exists()
 
     endpoint = mount / "kindle-brief" / "current" / "config" / "base-url"
+    assert endpoint.read_text(encoding="ascii") == "https://packaged-one.example.test\n"
     endpoint.write_text("https://dashboard.example.test\n", encoding="ascii")
     current_home = mount / "kindle-brief" / "current" / "pages" / "home.png"
     current_home.write_bytes(b"damaged")

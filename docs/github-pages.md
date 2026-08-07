@@ -3,15 +3,20 @@
 `.github/workflows/refresh.yml` builds a live static release and deploys it to
 GitHub Pages. It runs:
 
-- at minute 17 of every UTC hour;
+- at minute 17 of UTC hours 00 through 22;
 - at 23:00 UTC every day, which is 07:00 the next day in
   `Asia/Kuala_Lumpur`; and
 - on manual `workflow_dispatch`.
 
 Kuala Lumpur does not observe daylight-saving time. GitHub schedules are not a
 real-time service and may be delayed, especially near busy schedule boundaries.
-The extra 23:00 UTC trigger prioritizes the morning brief even though the
-hourly run also covers that hour.
+The 23:00 UTC trigger replaces, rather than supplements, the ordinary 23:17
+run so the morning brief is prioritized without a duplicate refresh.
+
+GitHub Actions is the scheduler for the documented automatic refresh. AI
+providers and models do not create their own timers or wake the build process;
+GitHub Actions, another external scheduler, or a manual CLI invocation must
+start each build.
 
 ## Enable Pages
 
@@ -84,10 +89,23 @@ curl -fL https://OWNER.github.io/REPOSITORY/profiles/kt5/current.json
 ```
 
 Use the public root, not the `profiles/kt5` subdirectory, as the Kindle base
-URL. Put that single HTTPS URL in the installed project's
-`/mnt/us/kindle-brief/current/config/base-url` file. The Kindle never updates
-automatically; it reads this endpoint only when **Update Dashboard** is selected
-in KUAL.
+URL. Package that single HTTPS URL for a first install with:
+
+```sh
+KINDLE_BRIEF_BASE_URL=https://OWNER.github.io/REPOSITORY make package-kindle
+```
+
+Alternatively, put it in the installed project's
+`/mnt/us/kindle-brief/current/config/base-url` file. Reinstalling or upgrading
+preserves an existing installed endpoint instead of replacing it with the
+packaged value.
+
+When the endpoint is configured, each manual **Start Dashboard** launch makes
+one best-effort update check with a shared 20-second network budget before
+displaying pages. A failed or expired check continues with the last verified
+cache or package-bundled pages. **Update Dashboard** remains available as an
+explicit KUAL action with the longer manual transfer limits. There is no boot
+hook, background updater, or device-side cron job.
 
 The endpoint must be reachable over unauthenticated HTTPS by the Kindle. A
 private Pages deployment that requires a browser session will not work with the

@@ -38,13 +38,15 @@ URL. The Kindle's separate update endpoint file requires HTTPS.
 
 ### `refresh`
 
-- `dashboard_minutes`: requested refresh cadence, 15–1440 minutes.
+- `dashboard_minutes`: reserved cadence metadata, validated as 15–1440 minutes;
+  it does not rewrite the checked-in GitHub Actions cron.
 - `morning_brief_local_time`: `HH:MM` local wall time.
 - `request_timeout_seconds`: 1–120 seconds.
 - `max_stale_hours`: maximum permitted stale-data window, 1–720 hours.
 
-The GitHub workflow runs hourly and separately at 07:00 Asia/Kuala_Lumpur.
-GitHub cron is UTC and may start late under load.
+The checked-in GitHub workflow runs at minute 17 of UTC hours 00–22 and at
+23:00 UTC (07:00 Asia/Kuala_Lumpur). GitHub cron is UTC and may start late
+under load. Change the workflow itself to change deployment cadence.
 
 ### `news`
 

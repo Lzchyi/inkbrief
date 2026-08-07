@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 from kindle_brief.renderer.tracks import (
-    CURRENT_2026_JOLPICA_IDS,
+    ACTIVE_2026_JOLPICA_IDS,
+    JOLPICA_2026_CIRCUIT_INVENTORY_IDS,
     JOLPICA_TO_SOURCE_ID,
     SOURCE_DATA_SHA256,
     TrackDataError,
@@ -25,15 +26,19 @@ def test_pinned_dataset_checksum_and_license_are_preserved() -> None:
     assert "Permission is hereby granted" in license_text
 
 
-def test_current_jolpica_ids_all_resolve_to_licensed_tracks() -> None:
+def test_2026_jolpica_inventory_and_active_ids_resolve_to_licensed_tracks() -> None:
     source_tracks = load_source_tracks(TRACK_DATA)
 
-    assert len(CURRENT_2026_JOLPICA_IDS) == 24
-    assert JOLPICA_TO_SOURCE_ID.keys() >= CURRENT_2026_JOLPICA_IDS
+    assert len(JOLPICA_2026_CIRCUIT_INVENTORY_IDS) == 24
+    assert len(ACTIVE_2026_JOLPICA_IDS) == 23
+    assert JOLPICA_2026_CIRCUIT_INVENTORY_IDS - {"jeddah"} == ACTIVE_2026_JOLPICA_IDS
+    assert JOLPICA_TO_SOURCE_ID.keys() >= JOLPICA_2026_CIRCUIT_INVENTORY_IDS
     assert source_tracks.keys() >= set(JOLPICA_TO_SOURCE_ID.values())
-    mapped_ids = {JOLPICA_TO_SOURCE_ID[item] for item in CURRENT_2026_JOLPICA_IDS}
+    mapped_ids = {JOLPICA_TO_SOURCE_ID[item] for item in JOLPICA_2026_CIRCUIT_INVENTORY_IDS}
     assert source_tracks.keys() >= mapped_ids
-    assert all(not get_track_outline(item).is_fallback for item in CURRENT_2026_JOLPICA_IDS)
+    assert all(
+        not get_track_outline(item).is_fallback for item in JOLPICA_2026_CIRCUIT_INVENTORY_IDS
+    )
 
 
 def test_known_track_uses_real_coordinates_and_provenance() -> None:

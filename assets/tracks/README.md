@@ -1,13 +1,16 @@
 # Circuit outline attribution
 
-`f1-circuits.geojson` is an unmodified copy of the circuit-coordinate dataset from
+`f1-circuits.geojson` contains the circuit-coordinate dataset from
 [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits), pinned to commit
-`432a253890199d0908e7f82044c52de8268cc056` ([source commit][commit]).
+`432a253890199d0908e7f82044c52de8268cc056` ([source commit][commit]). Trailing
+whitespace was normalized when the file was checked in; feature geometry and
+metadata are unchanged.
 
 - Author: Tomislav Bacinger
 - Licence: MIT; see `LICENSE.f1-circuits.md`
 - Source file: `f1-circuits.geojson`
-- Source SHA-256: `a0c8dfb3109a9181d096985eaa30bd692595eae9125b5b8686744600b24621b5`
+- Upstream byte SHA-256: `a0c8dfb3109a9181d096985eaa30bd692595eae9125b5b8686744600b24621b5`
+- Checked-in byte SHA-256: `6be251675f56666922687694d966457a43f4dab8a5c50f7cf25abb23a8cca7b9`
 - Retrieved: 2026-08-07
 
 The renderer uses only geographic line coordinates and circuit names. It does not include Formula

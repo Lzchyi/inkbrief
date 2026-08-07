@@ -11,6 +11,32 @@ case "$version" in
     ''|*[!0-9A-Za-z._-]*) kb_host_die "invalid Kindle package version" ;;
 esac
 
+packaged_base_url=${KINDLE_BRIEF_BASE_URL:-}
+if [ -n "$packaged_base_url" ]; then
+    [ "${#packaged_base_url}" -le 4096 ] || \
+        kb_host_die "KINDLE_BRIEF_BASE_URL is too long"
+    case "$packaged_base_url" in
+        https://?*) ;;
+        *) kb_host_die "KINDLE_BRIEF_BASE_URL must use HTTPS" ;;
+    esac
+    case "$packaged_base_url" in
+        *[!A-Za-z0-9._~:/?#\[\]@!$\&\'\(\)*+,\;=%-]*)
+            kb_host_die "KINDLE_BRIEF_BASE_URL contains unsupported characters"
+            ;;
+        *\?*|*\#*)
+            kb_host_die "KINDLE_BRIEF_BASE_URL must not contain a query or fragment"
+            ;;
+    esac
+    packaged_base_rest=${packaged_base_url#https://}
+    packaged_base_authority=${packaged_base_rest%%/*}
+    case "$packaged_base_authority" in
+        ''|*@*) kb_host_die "KINDLE_BRIEF_BASE_URL has an invalid authority" ;;
+    esac
+    while [ "${packaged_base_url%/}" != "$packaged_base_url" ]; do
+        packaged_base_url=${packaged_base_url%/}
+    done
+fi
+
 output=${1:-$KINDLE_DIR/dist/kindle-brief-$version}
 output_parent=$(dirname "$output")
 mkdir -p "$output_parent"
@@ -51,6 +77,9 @@ cp "$KINDLE_DIR/navigation/touch_controller.c" "$stage/payload/app/source/touch_
 cp "$KINDLE_DIR/install/probe.sh" "$stage/payload/app/bin/probe.sh"
 cp "$KINDLE_DIR/launcher/runtime.conf" "$stage/payload/app/config/runtime.conf"
 cp "$KINDLE_DIR/launcher/base-url.example" "$stage/payload/app/config/base-url.example"
+if [ -n "$packaged_base_url" ]; then
+    printf '%s\n' "$packaged_base_url" > "$stage/payload/app/config/base-url"
+fi
 cp "$KINDLE_DIR/VERSION" "$stage/payload/app/VERSION"
 cp "$KINDLE_DIR/launcher/Dashboard/menu.json" "$stage/payload/kual/menu.json"
 cp "$KINDLE_DIR/launcher/Dashboard/start.sh" "$stage/payload/kual/start.sh"

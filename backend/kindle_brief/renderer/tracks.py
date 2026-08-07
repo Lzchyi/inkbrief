@@ -18,7 +18,7 @@ Box = tuple[int, int, int, int]
 
 SOURCE_REPOSITORY = "https://github.com/bacinger/f1-circuits"
 SOURCE_COMMIT = "432a253890199d0908e7f82044c52de8268cc056"
-SOURCE_DATA_SHA256 = "a0c8dfb3109a9181d096985eaa30bd692595eae9125b5b8686744600b24621b5"
+SOURCE_DATA_SHA256 = "6be251675f56666922687694d966457a43f4dab8a5c50f7cf25abb23a8cca7b9"
 SOURCE_ATTRIBUTION = "Circuit coordinates © 2019–2025 Tomislav Bacinger, MIT License"
 
 _DEFAULT_DATA_PATH = (
@@ -26,7 +26,8 @@ _DEFAULT_DATA_PATH = (
 )
 
 # Jolpica/Ergast circuitId -> bacinger/f1-circuits feature ID. The first block is the complete
-# 2026 Jolpica circuit list as returned on 2026-08-07; the remainder supports recent prior seasons.
+# 2026 Jolpica circuit inventory as returned on 2026-08-08, including cancelled Jeddah; the
+# remainder supports recent prior seasons.
 JOLPICA_TO_SOURCE_ID: Mapping[str, str] = MappingProxyType(
     {
         "albert_park": "au-1953",
@@ -72,7 +73,7 @@ JOLPICA_TO_SOURCE_ID: Mapping[str, str] = MappingProxyType(
     }
 )
 
-CURRENT_2026_JOLPICA_IDS = frozenset(
+JOLPICA_2026_CIRCUIT_INVENTORY_IDS = frozenset(
     {
         "albert_park",
         "americas",
@@ -100,6 +101,10 @@ CURRENT_2026_JOLPICA_IDS = frozenset(
         "zandvoort",
     }
 )
+
+# The active 23-race calendar omits cancelled Jeddah while retaining Sepang, the replacement host
+# for the Bahrain Grand Prix.
+ACTIVE_2026_JOLPICA_IDS = JOLPICA_2026_CIRCUIT_INVENTORY_IDS - {"jeddah"}
 
 # Original generic loop for missing/unknown circuit IDs. It intentionally does not represent a
 # real venue and is distributed under this project's licence.

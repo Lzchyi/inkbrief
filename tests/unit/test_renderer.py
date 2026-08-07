@@ -5,12 +5,15 @@ import io
 import json
 import tarfile
 from dataclasses import replace
+from datetime import UTC, datetime
 
 from kindle_brief.demo import demo_snapshot
 from kindle_brief.models import DeviceProfile, PageID
-from kindle_brief.renderer.formatting import header_text
+from kindle_brief.renderer import icons
+from kindle_brief.renderer.formatting import header_text, is_night
 from kindle_brief.renderer.moon import moon_phase_image
 from kindle_brief.renderer.release import build_release, render_pages, render_previews
+from kindle_brief.renderer.theme import project_root
 from PIL import Image
 
 
@@ -28,6 +31,105 @@ def test_moon_rendering_tracks_new_quarter_and_full_phase() -> None:
     quarter = dark_fraction(moon_phase_image(180, 90))
     full = dark_fraction(moon_phase_image(180, 180))
     assert new > quarter > full
+
+
+def test_moon_texture_stays_inside_one_aligned_disc() -> None:
+    for angle in (0, 45, 90, 135, 180, 225, 270, 315):
+        image = moon_phase_image(154, angle)
+        assert all(image.getpixel(point) == 255 for point in ((0, 0), (153, 0), (0, 153)))
+
+
+def test_custom_icon_assets_cover_weather_and_motorsport_states() -> None:
+    assert icons.weather_icon_name("0", is_night=True) == "clear-night"
+    assert icons.weather_icon_name("2", cloud_cover_pct=80) == "mostly-cloudy"
+    assert icons.weather_icon_name("3", cloud_cover_pct=95) == "overcast"
+    assert icons.weather_icon_name("1", wind_kph=45) == "windy"
+    assert icons.weather_icon_name("3", visibility_km=3) == "haze"
+
+    weather = icons.weather_asset("2", 66, cloud_cover_pct=80)
+    assert weather.mode == "L"
+    assert weather.size == (66, 66)
+    assert weather.getextrema()[0] <= 5
+    assert weather.getextrema()[1] == 255
+
+    for name in ("helmet-compact", "car-compact", "calendar", "countdown", "trophy"):
+        asset = icons.motorsport_asset(name, 54)
+        assert asset.mode == "L"
+        assert asset.size == (54, 54)
+
+
+def test_every_cropped_icon_set_asset_is_present_and_readable() -> None:
+    weather_names = (
+        "clear-day",
+        "clear-night",
+        "partly-cloudy-day",
+        "partly-cloudy-night",
+        "mostly-cloudy",
+        "overcast",
+        "windy",
+        "fog",
+        "haze",
+        "drizzle",
+        "rain",
+        "heavy-rain",
+        "showers",
+        "thunderstorm",
+        "thunderstorm-rain",
+        "snow",
+        "sleet-hail",
+        "severe-storm",
+    )
+    for name in weather_names:
+        assert icons.raster_asset(f"weather/icons/{name}.png", 32).size == (32, 32)
+
+    moon_names = (
+        "new-moon",
+        "waxing-crescent",
+        "first-quarter",
+        "waxing-gibbous",
+        "full-moon",
+        "waning-gibbous",
+        "last-quarter",
+        "waning-crescent",
+    )
+    moon_dir = project_root() / "assets" / "moon" / "phases"
+    for name in moon_names:
+        with Image.open(moon_dir / f"{name}.png") as phase:
+            assert phase.size == (512, 512)
+            assert phase.mode == "RGBA"
+
+    motorsport_names = (
+        "helmet",
+        "helmet-compact",
+        "car",
+        "car-compact",
+        "checkered-flag",
+        "calendar",
+        "countdown",
+        "trophy",
+        "podium",
+        "track",
+    )
+    for name in motorsport_names:
+        assert icons.motorsport_asset(name, 32).size == (32, 32)
+
+
+def test_night_detection_uses_the_astronomy_daylight_window() -> None:
+    sunrise = datetime(2026, 8, 7, 23, 12, tzinfo=UTC)
+    sunset = datetime(2026, 8, 8, 11, 23, tzinfo=UTC)
+
+    assert not is_night(
+        datetime(2026, 8, 7, 23, 30, tzinfo=UTC),
+        "Asia/Kuala_Lumpur",
+        sunrise=sunrise,
+        sunset=sunset,
+    )
+    assert is_night(
+        datetime(2026, 8, 7, 22, 30, tzinfo=UTC),
+        "Asia/Kuala_Lumpur",
+        sunrise=sunrise,
+        sunset=sunset,
+    )
 
 
 def test_all_pages_have_exact_profile_dimensions_and_centered_header() -> None:

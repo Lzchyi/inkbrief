@@ -5,12 +5,33 @@ UPDATE_SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
 . "$UPDATE_SCRIPT_DIR/common.sh"
 
 display_result=0
-if [ "${1:-}" = "--display" ]; then
-    display_result=1
-elif [ "$#" -ne 0 ]; then
-    kb_log "usage: update.sh [--display]"
-    exit 2
-fi
+launch_mode=0
+case "${1:-}" in
+    '')
+        [ "$#" -eq 0 ] || {
+            kb_log "usage: update.sh [--display|--launch]"
+            exit 2
+        }
+        ;;
+    --display)
+        [ "$#" -eq 1 ] || {
+            kb_log "usage: update.sh [--display|--launch]"
+            exit 2
+        }
+        display_result=1
+        ;;
+    --launch)
+        [ "$#" -eq 1 ] || {
+            kb_log "usage: update.sh [--display|--launch]"
+            exit 2
+        }
+        launch_mode=1
+        ;;
+    *)
+        kb_log "usage: update.sh [--display|--launch]"
+        exit 2
+        ;;
+esac
 
 finish() {
     message=$1
@@ -23,20 +44,41 @@ finish() {
 }
 
 base_url_file=$KB_APP_ROOT/config/base-url
-if [ ! -r "$base_url_file" ]; then
+if [ ! -f "$base_url_file" ] || [ -L "$base_url_file" ] || \
+   [ ! -r "$base_url_file" ]; then
     finish "Update URL is not configured" 2
 fi
-IFS= read -r base_url < "$base_url_file" || finish "Update URL is unreadable" 2
+base_url_size=$(wc -c < "$base_url_file" | tr -d ' ')
+case "$base_url_size" in
+    ''|*[!0-9]*) finish "Update URL size is invalid" 2 ;;
+esac
+[ "$base_url_size" -le 4096 ] || finish "Update URL is too long" 2
+base_url_lines=$(awk 'END { print NR + 0 }' "$base_url_file") || \
+    finish "Update URL is unreadable" 2
+[ "$base_url_lines" -eq 1 ] || finish "Update URL must contain one line" 2
+base_url=
+IFS= read -r base_url < "$base_url_file" || [ -n "$base_url" ] || \
+    finish "Update URL is unreadable" 2
 case "$base_url" in
-    https://*) ;;
+    https://?*) ;;
     *) finish "Update URL must use HTTPS" 2 ;;
 esac
 case "$base_url" in
     *[!A-Za-z0-9._~:/?#\[\]@!$\&\'\(\)*+,\;=%-]*)
         finish "Update URL contains unsupported characters" 2
         ;;
+    *\?*|*\#*)
+        finish "Update URL must not contain a query or fragment" 2
+        ;;
 esac
-base_url=${base_url%/}
+base_url_rest=${base_url#https://}
+base_url_authority=${base_url_rest%%/*}
+case "$base_url_authority" in
+    ''|*@*) finish "Update URL has an invalid authority" 2 ;;
+esac
+while [ "${base_url%/}" != "$base_url" ]; do
+    base_url=${base_url%/}
+done
 
 download() {
     download_url=$1
@@ -133,6 +175,56 @@ png_metadata() {
     printf '%s %s %s %s\n' "$png_width" "$png_height" "${25}" "${26}"
 }
 
+bounded_regular_file() {
+    bounded_path=$1
+    bounded_limit=$2
+    [ -f "$bounded_path" ] && [ ! -L "$bounded_path" ] || return 1
+    bounded_size=$(wc -c < "$bounded_path" | tr -d ' ')
+    case "$bounded_size" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    [ "$bounded_size" -le "$bounded_limit" ]
+}
+
+cache_matches_pointer() {
+    cached_release=$1
+    bounded_regular_file "$cached_release/manifest.json" 1048576 || return 1
+    bounded_regular_file "$cached_release/SHA256SUMS" 65536 || return 1
+    cached_manifest_sha=$(sha256_file "$cached_release/manifest.json") || return 1
+    [ "$cached_manifest_sha" = "$manifest_sha" ] || return 1
+    cached_sums_sha=$(sha256_file "$cached_release/SHA256SUMS") || return 1
+    [ "$cached_sums_sha" = "$sums_sha" ] || return 1
+
+    cached_seen_pages=' '
+    cached_page_total=0
+    while IFS= read -r cached_checksum_line || [ -n "$cached_checksum_line" ]; do
+        cached_checksum=${cached_checksum_line%%  *}
+        cached_relative_path=${cached_checksum_line#*  }
+        [ "$cached_relative_path" != "$cached_checksum_line" ] || return 1
+        valid_sha256 "$cached_checksum" || return 1
+        case "$cached_relative_path" in
+            pages/home.png|pages/weather.png|pages/f1.png|pages/morning-brief.png|pages/headlines.png)
+                ;;
+            *) return 1 ;;
+        esac
+        case "$cached_seen_pages" in
+            *" $cached_relative_path "*) return 1 ;;
+        esac
+        cached_seen_pages="$cached_seen_pages$cached_relative_path "
+        cached_page_total=$((cached_page_total + 1))
+
+        cached_page_path=$cached_release/$cached_relative_path
+        bounded_regular_file "$cached_page_path" 8388608 || return 1
+        cached_actual_sha=$(sha256_file "$cached_page_path") || return 1
+        [ "$cached_actual_sha" = "$cached_checksum" ] || return 1
+        cached_page_metadata=$(png_metadata "$cached_page_path") || return 1
+        set -- $cached_page_metadata
+        [ "$#" -eq 4 ] && [ "$1" -eq 1072 ] && [ "$2" -eq 1448 ] && \
+            [ "$3" -eq 8 ] && [ "$4" -eq 0 ] || return 1
+    done < "$cached_release/SHA256SUMS"
+    [ "$cached_page_total" -eq 5 ]
+}
+
 cache_root=$KB_APP_ROOT/cache
 stage=$cache_root/.stage-$$
 promotion_active=0
@@ -168,14 +260,42 @@ trap 'exit 143' TERM
 download_tool=
 if download_tool=$(kb_find_command curl 2>/dev/null); then
     download_raw() {
+        download_connect_timeout=15
+        download_max_time=90
+        if [ "$launch_mode" -eq 1 ]; then
+            download_now=$("$launch_clock" +%s 2>/dev/null) || return 1
+            case "$download_now" in
+                ''|*[!0-9]*) return 1 ;;
+            esac
+            download_remaining=$((launch_deadline - download_now))
+            [ "$download_remaining" -gt 0 ] || return 1
+            download_max_time=$download_remaining
+            if [ "$download_connect_timeout" -gt "$download_remaining" ]; then
+                download_connect_timeout=$download_remaining
+            fi
+        fi
         "$download_tool" -fL --proto '=https' --proto-redir '=https' \
-            --connect-timeout 15 --max-time 90 \
+            --connect-timeout "$download_connect_timeout" \
+            --max-time "$download_max_time" \
             --max-filesize "$3" -o "$2" "$1"
     }
 elif download_tool=$(kb_find_command wget 2>/dev/null); then
     finish "Refusing wget because HTTPS-only redirects cannot be enforced" 3
 else
     finish "No HTTPS-safe curl downloader found" 3
+fi
+
+launch_clock=
+launch_deadline=0
+if [ "$launch_mode" -eq 1 ]; then
+    launch_clock=$(kb_find_command date 2>/dev/null) || \
+        finish "No clock is available for a bounded launch update" 3
+    launch_started=$("$launch_clock" +%s 2>/dev/null) || \
+        finish "Could not start the launch update deadline" 3
+    case "$launch_started" in
+        ''|*[!0-9]*) finish "Could not start the launch update deadline" 3 ;;
+    esac
+    launch_deadline=$((launch_started + 20))
 fi
 
 current_url=$base_url/profiles/kt5/current.json
@@ -195,6 +315,18 @@ sums_sha=$(json_string sha256sums_sha256 "$stage/current.json")
 valid_sha256 "$release_id" || finish "Invalid release identifier" 5
 valid_sha256 "$manifest_sha" || finish "Missing manifest checksum" 5
 valid_sha256 "$sums_sha" || finish "Missing page-checksum digest" 5
+
+installed_release_id=
+if kb_owned_cache_dir "$cache_root/current" && \
+   [ -f "$cache_root/current/RELEASE_ID" ] && \
+   [ ! -L "$cache_root/current/RELEASE_ID" ]; then
+    IFS= read -r installed_release_id < "$cache_root/current/RELEASE_ID" || \
+        installed_release_id=
+fi
+if [ "$installed_release_id" = "$release_id" ] && \
+   cache_matches_pointer "$cache_root/current"; then
+    finish "Dashboard is already current" 0
+fi
 
 release_url=$base_url/profiles/kt5/releases/$release_id
 download "$release_url/manifest.json" "$stage/manifest.json" 1048576 || \

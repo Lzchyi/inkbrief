@@ -2,7 +2,7 @@
 
 Kindle Brief deliberately keeps network, parsing, ranking, astronomy, and
 image rendering off the Kindle. The device is a narrow display client with a
-manual updater.
+launch-time and manual updater.
 
 ```text
 Open-Meteo ─┐
@@ -13,7 +13,8 @@ optional AI ──────────────────────�
                                                                     │
 GitHub Pages/static HTTPS <─ content-addressed release <────────────┘
              │
-             └─ manual KUAL update ─> staged checksum verification
+             └─ launch check / manual KUAL update
+                              └─> staged checksum verification
                                            │
                                   FBInk + touch controller
                                            │
@@ -53,17 +54,19 @@ The package installs a KUAL `Dashboard` entry and a hard-float ARM runtime in
 project-owned USB storage. It relies on FBInk supplied by the current hdnext
 environment. Starting the dashboard:
 
-1. Locates cached or package-bundled pages.
-2. Starts an independent maximum-runtime failsafe.
-3. Starts the touch controller, which discovers and exclusively grabs the
+1. Attempts one configured update with a 20-second network budget, continuing
+   on failure.
+2. Locates cached or package-bundled pages.
+3. Starts an independent maximum-runtime failsafe.
+4. Starts the touch controller, which discovers and exclusively grabs the
    touch input only while the dashboard is active.
-4. Draws one page at a time with a full GC16 refresh.
-5. Releases input and asks the stock Home UI to return on every normal or
+5. Draws one page at a time with a full GC16 refresh.
+6. Releases input and asks the stock Home UI to return on every normal or
    trapped exit.
 
 The stock framework is never stopped. There is no boot hook, cron job,
-systemd unit, or other device-side autostart. Updates occur only when the user
-selects **Update Dashboard** in KUAL.
+systemd unit, or other device-side autostart. Updates occur only during a
+manual Dashboard launch or when the user selects **Update Dashboard** in KUAL.
 
 ## Trust boundaries
 

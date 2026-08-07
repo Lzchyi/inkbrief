@@ -2,10 +2,127 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from functools import lru_cache
 
-from PIL import ImageDraw
+from PIL import Image, ImageDraw, ImageOps
+
+from .theme import PAPER, project_root
 
 Point = tuple[float, float]
+
+
+_WEATHER_ICON_BY_CODE: dict[int, str] = {
+    0: "clear-day",
+    1: "clear-day",
+    2: "partly-cloudy-day",
+    3: "overcast",
+    45: "fog",
+    48: "fog",
+    51: "drizzle",
+    53: "drizzle",
+    55: "heavy-rain",
+    56: "sleet-hail",
+    57: "sleet-hail",
+    61: "rain",
+    63: "rain",
+    65: "heavy-rain",
+    66: "sleet-hail",
+    67: "sleet-hail",
+    71: "snow",
+    73: "snow",
+    75: "snow",
+    77: "snow",
+    80: "showers",
+    81: "showers",
+    82: "heavy-rain",
+    85: "snow",
+    86: "snow",
+    95: "thunderstorm",
+    96: "thunderstorm-rain",
+    99: "severe-storm",
+}
+
+
+@lru_cache(maxsize=64)
+def _asset(relative_path: str) -> Image.Image:
+    path = project_root() / "assets" / relative_path
+    with Image.open(path) as image:
+        return image.convert("RGBA")
+
+
+def raster_asset(relative_path: str, size: int) -> Image.Image:
+    if size <= 0:
+        raise ValueError("icon size must be positive")
+    source = _asset(relative_path).resize((size, size), Image.Resampling.LANCZOS)
+    gray = ImageOps.grayscale(source.convert("RGB"))
+    result = Image.new("L", (size, size), PAPER)
+    result.paste(gray, (0, 0), source.getchannel("A"))
+    return result
+
+
+def weather_icon_name(
+    condition_code: str,
+    *,
+    is_night: bool = False,
+    wind_kph: float | None = None,
+    visibility_km: float | None = None,
+    cloud_cover_pct: float | None = None,
+) -> str:
+    try:
+        code = int(condition_code)
+    except (TypeError, ValueError):
+        code = 3
+    if code in {0, 1, 2} and wind_kph is not None and wind_kph >= 40:
+        return "windy"
+    if code in {0, 1, 2, 3} and visibility_km is not None and visibility_km < 5:
+        return "haze"
+    name = _WEATHER_ICON_BY_CODE.get(code, "overcast")
+    if cloud_cover_pct is not None and (
+        (code == 2 and cloud_cover_pct >= 70) or (code == 3 and cloud_cover_pct < 90)
+    ):
+        name = "mostly-cloudy"
+    if is_night:
+        if name == "clear-day":
+            return "clear-night"
+        if name == "partly-cloudy-day":
+            return "partly-cloudy-night"
+    return name
+
+
+def weather_asset(
+    condition_code: str,
+    size: int,
+    *,
+    is_night: bool = False,
+    wind_kph: float | None = None,
+    visibility_km: float | None = None,
+    cloud_cover_pct: float | None = None,
+) -> Image.Image:
+    name = weather_icon_name(
+        condition_code,
+        is_night=is_night,
+        wind_kph=wind_kph,
+        visibility_km=visibility_km,
+        cloud_cover_pct=cloud_cover_pct,
+    )
+    return raster_asset(f"weather/icons/{name}.png", size)
+
+
+def motorsport_asset(name: str, size: int) -> Image.Image:
+    if name not in {
+        "helmet",
+        "car",
+        "checkered-flag",
+        "calendar",
+        "countdown",
+        "trophy",
+        "podium",
+        "track",
+        "helmet-compact",
+        "car-compact",
+    }:
+        raise ValueError(f"unknown motorsport icon: {name}")
+    return raster_asset(f"icons/motorsport/{name}.png", size)
 
 
 def _scale(points: Sequence[Point], box: tuple[int, int, int, int]) -> list[Point]:
