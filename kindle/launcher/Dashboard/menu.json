@@ -1,0 +1,30 @@
+{
+  "items": [
+    {
+      "name": "Dashboard",
+      "priority": 0,
+      "items": [
+        {
+          "name": "Start Dashboard",
+          "priority": 0,
+          "action": "./start.sh"
+        },
+        {
+          "name": "Stop / Return to Library",
+          "priority": 10,
+          "action": "./stop.sh"
+        },
+        {
+          "name": "Update Dashboard",
+          "priority": 20,
+          "action": "./update.sh"
+        },
+        {
+          "name": "Diagnostics",
+          "priority": 30,
+          "action": "./diagnostics.sh"
+        }
+      ]
+    }
+  ]
+}

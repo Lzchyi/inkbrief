@@ -1,0 +1,761 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+from dataclasses import replace
+from datetime import timedelta
+from pathlib import Path
+
+import pytest
+from kindle_brief.demo import demo_snapshot
+from kindle_brief.models import DeviceProfile
+from kindle_brief.renderer.release import build_release
+from PIL import Image
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+INSTALL_SCRIPT = REPO_ROOT / "kindle" / "install" / "install.sh"
+UNINSTALL_SCRIPT = REPO_ROOT / "kindle" / "install" / "uninstall.sh"
+DETECT_SCRIPT = REPO_ROOT / "kindle" / "install" / "detect.sh"
+PACKAGE_SCRIPT = REPO_ROOT / "kindle" / "install" / "package.sh"
+VERIFY_BACKUP_SCRIPT = REPO_ROOT / "kindle" / "install" / "verify-backup.sh"
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _make_fake_mount(tmp_path: Path, name: str = "Kindle") -> Path:
+    mount = tmp_path / name
+    (mount / "documents").mkdir(parents=True)
+    (mount / "system").mkdir()
+    (mount / "system" / "version.txt").write_text(
+        "Kindle 5.19.2.0.1 (474059 001)", encoding="ascii"
+    )
+    (mount / "documents" / "existing-book.azw3").write_bytes(b"user book\x00contents")
+    (mount / "metadata.calibre").write_text("calibre-owned", encoding="utf-8")
+    return mount
+
+
+def _make_package(tmp_path: Path, version: str) -> Path:
+    package = tmp_path / f"package-{version}"
+    app = package / "payload" / "app"
+    kual = package / "payload" / "kual"
+    (app / "bin").mkdir(parents=True)
+    (app / "config").mkdir()
+    (app / "pages").mkdir()
+    kual.mkdir(parents=True)
+
+    (app / ".kindle-brief-owned").write_text("kindle-brief-owned-v1\n", encoding="ascii")
+    (kual / ".kindle-brief-owned").write_text("kindle-brief-owned-v1\n", encoding="ascii")
+    (app / "VERSION").write_text(f"{version}\n", encoding="ascii")
+    (app / "config" / "runtime.conf").write_text("max_runtime=1800\n", encoding="ascii")
+    (app / "bin" / "start.sh").write_text("#!/bin/sh\nexit 0\n", encoding="ascii")
+    controller = app / "bin" / "touch-controller"
+    controller.write_bytes(b"fake-armhf-controller-" + version.encode("ascii"))
+    (app / "TOUCH_ABI").write_text("kindlehf-armv7-hardfloat-static\n", encoding="ascii")
+    (kual / "menu.json").write_text('{"items": []}\n', encoding="ascii")
+    (kual / "start.sh").write_text("#!/bin/sh\nexit 0\n", encoding="ascii")
+    for page_id in ("home", "weather", "f1", "morning-brief", "headlines"):
+        (app / "pages" / f"{page_id}.png").write_bytes(
+            b"png-fixture:" + page_id.encode("ascii") + b":" + version.encode("ascii")
+        )
+
+    for executable in (app / "bin" / "start.sh", controller, kual / "start.sh"):
+        executable.chmod(0o755)
+
+    payload_files = sorted(path for path in (package / "payload").rglob("*") if path.is_file())
+    manifest = "".join(
+        f"{_sha256(path)}  {path.relative_to(package / 'payload').as_posix()}\n"
+        for path in payload_files
+    )
+    (package / "SHA256SUMS").write_text(manifest, encoding="ascii")
+    package_id = hashlib.sha256(manifest.encode("ascii")).hexdigest()
+    (package / "PACKAGE_ID").write_text(f"{package_id}\n", encoding="ascii")
+    (package / "VERSION").write_text(f"{version}\n", encoding="ascii")
+    (package / ".kindle-brief-package").write_text("kindle-brief-package-v1\n", encoding="ascii")
+    return package
+
+
+def _run(script: Path, *args: object, check: bool = False) -> subprocess.CompletedProcess[str]:
+    environment = os.environ.copy()
+    environment["KINDLE_BRIEF_ALLOW_FAKE_MOUNT"] = "1"
+    return subprocess.run(
+        ["/bin/sh", str(script), *(str(argument) for argument in args)],
+        check=check,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+
+def _install(mount: Path, package: Path) -> subprocess.CompletedProcess[str]:
+    return _run(
+        INSTALL_SCRIPT,
+        "--package",
+        package,
+        "--model",
+        "KT5",
+        mount,
+    )
+
+
+def _make_update_harness(
+    tmp_path: Path,
+    public: Path,
+) -> tuple[Path, dict[str, str], Path]:
+    app_root = tmp_path / "on-device-app"
+    (app_root / "bin").mkdir(parents=True)
+    (app_root / "config").mkdir()
+    shutil.copy2(REPO_ROOT / "kindle" / "launcher" / "common.sh", app_root / "bin")
+    shutil.copy2(REPO_ROOT / "kindle" / "launcher" / "update.sh", app_root / "bin")
+    (app_root / "config" / "base-url").write_text(
+        "https://updates.example.test\n", encoding="ascii"
+    )
+
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    fake_curl = fake_bin / "curl"
+    fake_curl.write_text(
+        """#!/bin/sh
+output=
+limit=
+proto=
+proto_redir=
+url=
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -o) output=$2; shift 2 ;;
+        --max-filesize) limit=$2; shift 2 ;;
+        --proto) proto=$2; shift 2 ;;
+        --proto-redir) proto_redir=$2; shift 2 ;;
+        --connect-timeout|--max-time) shift 2 ;;
+        -*) shift ;;
+        *) url=$1; shift ;;
+    esac
+done
+[ "$proto" = '=https' ] && [ "$proto_redir" = '=https' ] || exit 92
+relative=${url#https://updates.example.test/}
+[ -n "$output" ] && [ "$relative" != "$url" ] || exit 2
+source_file=$FAKE_RELEASE_ROOT/$relative
+[ -f "$source_file" ] || exit 22
+size=$(wc -c < "$source_file" | tr -d ' ')
+[ -z "$limit" ] || [ "$size" -le "$limit" ] || exit 63
+cp "$source_file" "$output"
+""",
+        encoding="ascii",
+    )
+    fake_sha256sum = fake_bin / "sha256sum"
+    fake_sha256sum.write_text(
+        """#!/bin/sh
+if command -v shasum >/dev/null 2>&1; then
+    exec shasum -a 256 "$@"
+fi
+exec /usr/bin/sha256sum "$@"
+""",
+        encoding="ascii",
+    )
+    fake_curl.chmod(0o755)
+    fake_sha256sum.chmod(0o755)
+
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "FAKE_RELEASE_ROOT": str(public),
+            "KINDLE_BRIEF_ROOT": str(app_root),
+            "KINDLE_BRIEF_STATE_DIR": str(tmp_path / "state"),
+            "PATH": f"{fake_bin}:{environment['PATH']}",
+        }
+    )
+    return app_root, environment, fake_bin
+
+
+def _run_update(app_root: Path, environment: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["/bin/sh", str(app_root / "bin" / "update.sh")],
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+
+def _rewrite_release_metadata(
+    public: Path,
+    current: dict[str, object],
+    manifest: dict[str, object],
+    sums: str,
+) -> None:
+    profile_root = public / "profiles" / "kt5"
+    release_root = profile_root / "releases" / str(current["release_id"])
+    manifest_path = release_root / "manifest.json"
+    sums_path = release_root / "SHA256SUMS"
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    sums_path.write_text(sums, encoding="ascii")
+    current["manifest_sha256"] = _sha256(manifest_path)
+    current["sha256sums_sha256"] = _sha256(sums_path)
+    (profile_root / "current.json").write_text(
+        json.dumps(current, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_real_packager_output_installs_on_fake_mount(tmp_path: Path) -> None:
+    package = tmp_path / "kindle-brief-integration"
+    packaged = _run(PACKAGE_SCRIPT, package)
+    assert packaged.returncode == 0, packaged.stderr
+    assert package.is_dir()
+    assert (package / "payload" / "app" / "TOUCH_ABI").read_text(
+        encoding="ascii"
+    ) == "kindlehf-armv7-hardfloat-static\n"
+    assert "ELF 32-bit" in subprocess.check_output(
+        ["file", str(package / "payload" / "app" / "bin" / "touch-controller")],
+        text=True,
+    )
+
+    mount = _make_fake_mount(tmp_path, "Packaged Kindle")
+    installed = _install(mount, package)
+    assert installed.returncode == 0, installed.stderr
+    assert (mount / "kindle-brief" / "current" / "pages" / "home.png").is_file()
+    assert (mount / "extensions" / "Dashboard" / "menu.json").is_file()
+
+
+def test_backup_verifier_is_read_only_and_excludes_only_regenerated_caches(
+    tmp_path: Path,
+) -> None:
+    mount = _make_fake_mount(tmp_path, "Backup Source Kindle")
+    backup = tmp_path / "backup"
+    shutil.copytree(mount, backup)
+    regenerated = mount / "system" / "thumbnails" / "new-thumbnail.jpg"
+    regenerated.parent.mkdir()
+    regenerated.write_bytes(b"regenerated")
+    os.utime(mount / "documents", (1_700_000_000, 1_700_000_000))
+    before = {
+        path.relative_to(mount): path.read_bytes() for path in mount.rglob("*") if path.is_file()
+    }
+
+    clean = _run(VERIFY_BACKUP_SCRIPT, mount, backup)
+    assert clean.returncode == 0, clean.stderr
+    assert "matches" in clean.stdout
+    assert {
+        path.relative_to(mount): path.read_bytes() for path in mount.rglob("*") if path.is_file()
+    } == before
+
+    (mount / "documents" / "existing-book.azw3").write_bytes(b"changed size")
+    mismatch = _run(VERIFY_BACKUP_SCRIPT, mount, backup)
+    assert mismatch.returncode == 1
+    assert "documents/existing-book.azw3" in mismatch.stderr
+
+
+def test_host_release_is_directly_consumable_by_posix_updater(tmp_path: Path) -> None:
+    public = tmp_path / "public"
+    profile = DeviceProfile(
+        "kt5",
+        "Kindle 11th generation (2022)",
+        1072,
+        1448,
+        model_code="KT5",
+    )
+    manifest = build_release(demo_snapshot(), profile, public)
+    profile_root = public / "profiles" / "kt5"
+    current = json.loads((profile_root / "current.json").read_text(encoding="utf-8"))
+    assert current["profile_id"] == "kt5"
+    assert current["model_code"] == "KT5"
+    assert current["release_id"] == manifest.release_id
+
+    release_root = profile_root / "releases" / manifest.release_id
+    manifest_path = release_root / "manifest.json"
+    sums_path = release_root / "SHA256SUMS"
+    assert _sha256(manifest_path) == current["manifest_sha256"]
+    assert _sha256(sums_path) == current["sha256sums_sha256"]
+    manifest_json = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest_json["profile"]["profile_id"] == "kt5"
+    assert manifest_json["profile"]["model_code"] == "KT5"
+
+    sidecar: dict[str, str] = {}
+    for line in sums_path.read_text(encoding="ascii").splitlines():
+        digest, relative_path = line.split("  ", 1)
+        assert len(digest) == 64
+        assert relative_path not in sidecar
+        sidecar[relative_path] = digest
+    expected_paths = {
+        "pages/home.png",
+        "pages/weather.png",
+        "pages/f1.png",
+        "pages/morning-brief.png",
+        "pages/headlines.png",
+    }
+    assert set(sidecar) == expected_paths
+    assert sidecar == {page["path"]: page["sha256"] for page in manifest_json["pages"]}
+    for relative_path, digest in sidecar.items():
+        assert _sha256(release_root / relative_path) == digest
+
+    app_root = tmp_path / "on-device-app"
+    (app_root / "bin").mkdir(parents=True)
+    (app_root / "config").mkdir()
+    shutil.copy2(REPO_ROOT / "kindle" / "launcher" / "common.sh", app_root / "bin")
+    shutil.copy2(REPO_ROOT / "kindle" / "launcher" / "update.sh", app_root / "bin")
+    (app_root / "config" / "base-url").write_text(
+        "https://updates.example.test\n", encoding="ascii"
+    )
+
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    fake_curl = fake_bin / "curl"
+    fake_curl.write_text(
+        """#!/bin/sh
+output=
+limit=
+url=
+while [ \"$#\" -gt 0 ]; do
+    case \"$1\" in
+        -o) output=$2; shift 2 ;;
+        --max-filesize) limit=$2; shift 2 ;;
+        --connect-timeout|--max-time) shift 2 ;;
+        -*) shift ;;
+        *) url=$1; shift ;;
+    esac
+done
+relative=${url#https://updates.example.test/}
+[ -n \"$output\" ] && [ \"$relative\" != \"$url\" ] || exit 2
+source_file=$FAKE_RELEASE_ROOT/$relative
+[ -f \"$source_file\" ] || exit 22
+size=$(wc -c < \"$source_file\" | tr -d ' ')
+[ -z \"$limit\" ] || [ \"$size\" -le \"$limit\" ] || exit 63
+cp \"$source_file\" \"$output\"
+""",
+        encoding="ascii",
+    )
+    fake_sha256sum = fake_bin / "sha256sum"
+    fake_sha256sum.write_text(
+        """#!/bin/sh
+if command -v shasum >/dev/null 2>&1; then
+    exec shasum -a 256 \"$@\"
+fi
+exec /usr/bin/sha256sum \"$@\"
+""",
+        encoding="ascii",
+    )
+    fake_curl.chmod(0o755)
+    fake_sha256sum.chmod(0o755)
+
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "FAKE_RELEASE_ROOT": str(public),
+            "KINDLE_BRIEF_ROOT": str(app_root),
+            "KINDLE_BRIEF_STATE_DIR": str(tmp_path / "state"),
+            "PATH": f"{fake_bin}:{environment['PATH']}",
+        }
+    )
+    updated = subprocess.run(
+        ["/bin/sh", str(app_root / "bin" / "update.sh")],
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    assert updated.returncode == 0, updated.stderr
+    cache = app_root / "cache" / "current"
+    assert (cache / "RELEASE_ID").read_text(encoding="ascii").strip() == manifest.release_id
+    assert not (cache / "dashboard.tar.gz").exists()
+    for relative_path in expected_paths:
+        assert (cache / relative_path).read_bytes() == (release_root / relative_path).read_bytes()
+
+
+def test_update_rolls_back_current_when_verified_stage_promotion_fails(tmp_path: Path) -> None:
+    public = tmp_path / "public"
+    profile = DeviceProfile("kt5", "Kindle", 1072, 1448, model_code="KT5")
+    first = build_release(demo_snapshot(), profile, public)
+    app_root, environment, fake_bin = _make_update_harness(tmp_path, public)
+    installed = _run_update(app_root, environment)
+    assert installed.returncode == 0, installed.stderr
+
+    second_snapshot = replace(
+        demo_snapshot(), generated_at=demo_snapshot().generated_at + timedelta(minutes=1)
+    )
+    second = build_release(second_snapshot, profile, public)
+    assert second.release_id != first.release_id
+    fake_mv = fake_bin / "mv"
+    fake_mv.write_text(
+        """#!/bin/sh
+case "${1:-}:${2:-}" in
+    */cache/.stage-*:*cache/current)
+        [ "${FAIL_STAGE_PROMOTION:-0}" = 1 ] && exit 70
+        ;;
+esac
+exec /bin/mv "$@"
+""",
+        encoding="ascii",
+    )
+    fake_mv.chmod(0o755)
+    environment["FAIL_STAGE_PROMOTION"] = "1"
+
+    failed = _run_update(app_root, environment)
+
+    assert failed.returncode != 0
+    assert "Could not promote verified dashboard update" in failed.stderr
+    cache_root = app_root / "cache"
+    assert (cache_root / "current" / "RELEASE_ID").read_text(
+        encoding="ascii"
+    ).strip() == first.release_id
+    assert not list(cache_root.glob(".stage-*"))
+
+
+def test_update_recovers_owned_previous_before_network_failure(tmp_path: Path) -> None:
+    public = tmp_path / "public"
+    profile = DeviceProfile("kt5", "Kindle", 1072, 1448, model_code="KT5")
+    release = build_release(demo_snapshot(), profile, public)
+    app_root, environment, _ = _make_update_harness(tmp_path, public)
+    installed = _run_update(app_root, environment)
+    assert installed.returncode == 0, installed.stderr
+    cache_root = app_root / "cache"
+    (cache_root / "current").rename(cache_root / "previous")
+    unavailable = tmp_path / "unavailable"
+    unavailable.mkdir()
+    environment["FAKE_RELEASE_ROOT"] = str(unavailable)
+
+    failed = _run_update(app_root, environment)
+
+    assert failed.returncode != 0
+    assert "Could not download bounded update pointer" in failed.stderr
+    assert (cache_root / "current" / "RELEASE_ID").read_text(
+        encoding="ascii"
+    ).strip() == release.release_id
+    assert not (cache_root / "previous").exists()
+
+
+def test_dashboard_and_diagnostics_fall_back_to_owned_previous_cache(tmp_path: Path) -> None:
+    app_root = tmp_path / "runtime-app"
+    bin_dir = app_root / "bin"
+    previous_pages = app_root / "cache" / "previous" / "pages"
+    bundled_pages = app_root / "pages"
+    bin_dir.mkdir(parents=True)
+    previous_pages.mkdir(parents=True)
+    bundled_pages.mkdir()
+    for script in ("common.sh", "dashboard.sh", "diagnostics.sh"):
+        shutil.copy2(REPO_ROOT / "kindle" / "launcher" / script, bin_dir / script)
+    (app_root / "cache" / "previous" / ".kindle-brief-cache").write_text(
+        "kindle-brief-cache-v1\n", encoding="ascii"
+    )
+    for page_id in ("home", "weather", "f1", "morning-brief", "headlines"):
+        (previous_pages / f"{page_id}.png").write_bytes(b"previous")
+        (bundled_pages / f"{page_id}.png").write_bytes(b"bundled")
+    display_log = tmp_path / "display.log"
+    scripts = {
+        "touch-controller": "#!/bin/sh\nprintf '%s\\n' TIMEOUT\n",
+        "fbink-display.sh": '#!/bin/sh\nprintf \'%s\\n\' "$1" >> "$DISPLAY_LOG"\n',
+        "failsafe.sh": "#!/bin/sh\nexit 0\n",
+        "restore-ui.sh": "#!/bin/sh\nexit 0\n",
+    }
+    for name, content in scripts.items():
+        path = bin_dir / name
+        path.write_text(content, encoding="ascii")
+        path.chmod(0o755)
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "DISPLAY_LOG": str(display_log),
+            "KINDLE_BRIEF_ROOT": str(app_root),
+            "KINDLE_BRIEF_STATE_DIR": str(tmp_path / "runtime-state"),
+        }
+    )
+
+    dashboard = subprocess.run(
+        ["/bin/sh", str(bin_dir / "dashboard.sh")],
+        capture_output=True,
+        text=True,
+        env=environment,
+        timeout=10,
+    )
+    diagnostics = subprocess.run(
+        ["/bin/sh", str(bin_dir / "diagnostics.sh")],
+        capture_output=True,
+        text=True,
+        env=environment,
+        timeout=10,
+    )
+
+    assert dashboard.returncode == 0, dashboard.stderr
+    assert display_log.read_text(encoding="utf-8").splitlines()[0] == str(
+        previous_pages / "home.png"
+    )
+    assert diagnostics.returncode == 0, diagnostics.stderr
+    assert "Pages: 5/5" in diagnostics.stdout
+
+
+@pytest.mark.parametrize(
+    ("case", "message"),
+    (
+        ("pointer-schema", "Unsupported update pointer schema"),
+        ("manifest-schema", "Unsupported manifest schema"),
+        ("manifest-release", "Manifest release mismatch"),
+        ("nested-profile", "Manifest device profile is unsupported"),
+        ("page-width", "Invalid manifest page metadata"),
+        ("page-byte-size", "Page byte size does not match manifest"),
+    ),
+)
+def test_update_rejects_invalid_pointer_or_manifest_contract(
+    tmp_path: Path,
+    case: str,
+    message: str,
+) -> None:
+    public = tmp_path / "public"
+    profile = DeviceProfile("kt5", "Kindle", 1072, 1448, model_code="KT5")
+    release = build_release(demo_snapshot(), profile, public)
+    profile_root = public / "profiles" / "kt5"
+    current_path = profile_root / "current.json"
+    release_root = profile_root / "releases" / release.release_id
+    current = json.loads(current_path.read_text(encoding="utf-8"))
+    manifest = json.loads((release_root / "manifest.json").read_text(encoding="utf-8"))
+    sums = (release_root / "SHA256SUMS").read_text(encoding="ascii")
+
+    if case == "pointer-schema":
+        current["schema_version"] = 2
+        current_path.write_text(
+            json.dumps(current, sort_keys=True, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+    else:
+        if case == "manifest-schema":
+            manifest["schema_version"] = 2
+        elif case == "manifest-release":
+            manifest["release_id"] = "f" * 64
+        elif case == "nested-profile":
+            manifest["profile"]["grayscale_bits"] = 8
+        elif case == "page-width":
+            manifest["pages"][0]["width"] = 1071
+        elif case == "page-byte-size":
+            manifest["pages"][0]["byte_size"] += 1
+        _rewrite_release_metadata(public, current, manifest, sums)
+
+    app_root, environment, _ = _make_update_harness(tmp_path, public)
+    rejected = _run_update(app_root, environment)
+
+    assert rejected.returncode != 0
+    assert message in rejected.stderr
+    assert not (app_root / "cache" / "current").exists()
+
+
+def test_update_rejects_self_consistent_non_grayscale_png(tmp_path: Path) -> None:
+    public = tmp_path / "public"
+    profile = DeviceProfile("kt5", "Kindle", 1072, 1448, model_code="KT5")
+    release = build_release(demo_snapshot(), profile, public)
+    profile_root = public / "profiles" / "kt5"
+    release_root = profile_root / "releases" / release.release_id
+    current = json.loads((profile_root / "current.json").read_text(encoding="utf-8"))
+    manifest = json.loads((release_root / "manifest.json").read_text(encoding="utf-8"))
+    page_path = release_root / "pages" / "home.png"
+    Image.new("RGB", (1072, 1448), "white").save(page_path)
+    digest = _sha256(page_path)
+    byte_size = page_path.stat().st_size
+    page = next(item for item in manifest["pages"] if item["page_id"] == "home")
+    page["sha256"] = digest
+    page["byte_size"] = byte_size
+    sums_lines = []
+    for line in (release_root / "SHA256SUMS").read_text(encoding="ascii").splitlines():
+        old_digest, relative_path = line.split("  ", 1)
+        sums_lines.append(
+            f"{digest if relative_path == 'pages/home.png' else old_digest}  {relative_path}"
+        )
+    _rewrite_release_metadata(public, current, manifest, "\n".join(sums_lines) + "\n")
+    app_root, environment, _ = _make_update_harness(tmp_path, public)
+
+    rejected = _run_update(app_root, environment)
+
+    assert rejected.returncode != 0
+    assert "Page PNG dimensions or type are unsupported" in rejected.stderr
+    assert not (app_root / "cache" / "current").exists()
+
+
+def test_update_refuses_wget_without_invoking_it(tmp_path: Path) -> None:
+    public = tmp_path / "public"
+    profile = DeviceProfile("kt5", "Kindle", 1072, 1448, model_code="KT5")
+    build_release(demo_snapshot(), profile, public)
+    app_root, environment, fake_bin = _make_update_harness(tmp_path, public)
+    (fake_bin / "curl").unlink()
+    (fake_bin / "wget").write_text(
+        '#!/bin/sh\nprintf called > "$WGET_MARKER"\nexit 99\n',
+        encoding="ascii",
+    )
+    (fake_bin / "wget").chmod(0o755)
+    for command in ("dirname", "mkdir", "rm"):
+        executable = shutil.which(command)
+        assert executable is not None
+        (fake_bin / command).symlink_to(executable)
+    marker = tmp_path / "wget-called"
+    environment["PATH"] = str(fake_bin)
+    environment["WGET_MARKER"] = str(marker)
+
+    rejected = _run_update(app_root, environment)
+
+    assert rejected.returncode == 3
+    assert "Refusing wget" in rejected.stderr
+    assert not marker.exists()
+
+
+def test_install_is_scoped_idempotent_and_keeps_previous_release(tmp_path: Path) -> None:
+    mount = _make_fake_mount(tmp_path)
+    first_package = _make_package(tmp_path, "0.1.0")
+    second_package = _make_package(tmp_path, "0.2.0")
+    book_before = (mount / "documents" / "existing-book.azw3").read_bytes()
+    calibre_before = (mount / "metadata.calibre").read_bytes()
+
+    first = _install(mount, first_package)
+    assert first.returncode == 0, first.stderr
+    first_id = (first_package / "PACKAGE_ID").read_text(encoding="ascii")
+    assert (mount / "kindle-brief" / "current" / "PACKAGE_ID").read_text(
+        encoding="ascii"
+    ) == first_id
+    assert (mount / "extensions" / "Dashboard" / "menu.json").is_file()
+    assert not (mount / "kindle-brief" / "previous").exists()
+
+    endpoint = mount / "kindle-brief" / "current" / "config" / "base-url"
+    endpoint.write_text("https://dashboard.example.test\n", encoding="ascii")
+    current_home = mount / "kindle-brief" / "current" / "pages" / "home.png"
+    current_home.write_bytes(b"damaged")
+    orphan = mount / "kindle-brief" / "current" / "orphan"
+    orphan.write_text("remove me", encoding="ascii")
+    (mount / "extensions" / "Dashboard" / "menu.json").write_text("damaged", encoding="ascii")
+    repeated = _install(mount, first_package)
+    assert repeated.returncode == 0, repeated.stderr
+    assert not (mount / "kindle-brief" / "previous").exists()
+    assert endpoint.read_text(encoding="ascii") == "https://dashboard.example.test\n"
+    assert (
+        current_home.read_bytes()
+        == (first_package / "payload" / "app" / "pages" / "home.png").read_bytes()
+    )
+    assert not orphan.exists()
+    assert (mount / "extensions" / "Dashboard" / "menu.json").read_bytes() == (
+        first_package / "payload" / "kual" / "menu.json"
+    ).read_bytes()
+
+    upgraded = _install(mount, second_package)
+    assert upgraded.returncode == 0, upgraded.stderr
+    second_id = (second_package / "PACKAGE_ID").read_text(encoding="ascii")
+    assert (mount / "kindle-brief" / "current" / "PACKAGE_ID").read_text(
+        encoding="ascii"
+    ) == second_id
+    assert (mount / "kindle-brief" / "previous" / "PACKAGE_ID").read_text(
+        encoding="ascii"
+    ) == first_id
+    assert (mount / "kindle-brief" / "current" / "config" / "base-url").read_text(
+        encoding="ascii"
+    ) == "https://dashboard.example.test\n"
+
+    current_home.write_bytes(b"damaged again")
+    repaired_upgrade = _install(mount, second_package)
+    assert repaired_upgrade.returncode == 0, repaired_upgrade.stderr
+    assert (
+        current_home.read_bytes()
+        == (second_package / "payload" / "app" / "pages" / "home.png").read_bytes()
+    )
+    assert (mount / "kindle-brief" / "previous" / "PACKAGE_ID").read_text(
+        encoding="ascii"
+    ) == first_id
+    assert endpoint.read_text(encoding="ascii") == "https://dashboard.example.test\n"
+
+    assert (mount / "documents" / "existing-book.azw3").read_bytes() == book_before
+    assert (mount / "metadata.calibre").read_bytes() == calibre_before
+    assert not list((mount / "kindle-brief").glob(".stage-*"))
+    assert not list((mount / "kindle-brief").glob(".current.repair-*"))
+    assert not list((mount / "extensions").glob(".Dashboard.stage-*"))
+
+
+def test_uninstall_removes_only_owned_dashboard_paths(tmp_path: Path) -> None:
+    mount = _make_fake_mount(tmp_path)
+    package = _make_package(tmp_path, "0.1.0")
+    assert _install(mount, package).returncode == 0
+    unrelated = mount / "screensavers" / "personal.png"
+    unrelated.parent.mkdir()
+    unrelated.write_bytes(b"keep")
+
+    result = _run(UNINSTALL_SCRIPT, mount)
+    assert result.returncode == 0, result.stderr
+    assert not (mount / "kindle-brief").exists()
+    assert not (mount / "extensions" / "Dashboard").exists()
+    assert (mount / "documents" / "existing-book.azw3").read_bytes() == b"user book\x00contents"
+    assert (mount / "metadata.calibre").read_text(encoding="utf-8") == "calibre-owned"
+    assert unrelated.read_bytes() == b"keep"
+
+    repeated = _run(UNINSTALL_SCRIPT, mount)
+    assert repeated.returncode == 0
+    assert "nothing changed" in repeated.stdout
+
+
+def test_install_refuses_wrong_firmware_before_writing(tmp_path: Path) -> None:
+    mount = _make_fake_mount(tmp_path)
+    package = _make_package(tmp_path, "0.1.0")
+    (mount / "system" / "version.txt").write_text("Kindle 5.19.3 (1)", encoding="ascii")
+
+    result = _install(mount, package)
+    assert result.returncode != 0
+    assert "pinned to 5.19.2.0.1" in result.stderr
+    assert not (mount / "kindle-brief").exists()
+    assert not (mount / "extensions").exists()
+
+
+def test_install_refuses_corrupt_package_before_writing(tmp_path: Path) -> None:
+    mount = _make_fake_mount(tmp_path)
+    package = _make_package(tmp_path, "0.1.0")
+    (package / "payload" / "app" / "VERSION").write_text("tampered\n", encoding="ascii")
+
+    result = _install(mount, package)
+    assert result.returncode != 0
+    assert "checksum mismatch" in result.stderr
+    assert not (mount / "kindle-brief").exists()
+
+
+def test_install_refuses_unowned_kual_collision(tmp_path: Path) -> None:
+    mount = _make_fake_mount(tmp_path)
+    package = _make_package(tmp_path, "0.1.0")
+    collision = mount / "extensions" / "Dashboard"
+    collision.mkdir(parents=True)
+    (collision / "menu.json").write_text("user content", encoding="utf-8")
+
+    result = _install(mount, package)
+    assert result.returncode != 0
+    assert "unowned existing KUAL" in result.stderr
+    assert (collision / "menu.json").read_text(encoding="utf-8") == "user content"
+    assert not (mount / "kindle-brief").exists()
+
+
+def test_detect_refuses_ambiguous_mounts_without_writing(tmp_path: Path) -> None:
+    first = _make_fake_mount(tmp_path, "Kindle One")
+    second = _make_fake_mount(tmp_path, "Kindle Two")
+    snapshots = {
+        path: path.read_bytes()
+        for mount in (first, second)
+        for path in mount.rglob("*")
+        if path.is_file()
+    }
+
+    result = _run(DETECT_SCRIPT, first, second)
+    assert result.returncode == 3
+    assert "multiple Kindle-like mounts" in result.stderr
+    assert {path: path.read_bytes() for path in snapshots} == snapshots
+
+
+def test_uninstall_refuses_unowned_path_atomically(tmp_path: Path) -> None:
+    mount = _make_fake_mount(tmp_path)
+    package = _make_package(tmp_path, "0.1.0")
+    assert _install(mount, package).returncode == 0
+    marker = mount / "extensions" / "Dashboard" / ".kindle-brief-owned"
+    marker.unlink()
+
+    result = _run(UNINSTALL_SCRIPT, mount)
+    assert result.returncode != 0
+    assert (mount / "kindle-brief").is_dir()
+    assert (mount / "extensions" / "Dashboard").is_dir()
+
+
+@pytest.mark.parametrize("model", ["PW5", "KT6", "unknown"])
+def test_install_accepts_only_exact_kt5_assertion(tmp_path: Path, model: str) -> None:
+    mount = _make_fake_mount(tmp_path)
+    package = _make_package(tmp_path, "0.1.0")
+    result = _run(INSTALL_SCRIPT, "--package", package, "--model", model, mount)
+    assert result.returncode != 0
+    assert not (mount / "kindle-brief").exists()

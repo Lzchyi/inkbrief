@@ -1,0 +1,3 @@
+# Copy this file to base-url and replace the line with an HTTPS release root.
+# The Kindle never updates automatically.
+https://example.invalid/kindle-brief

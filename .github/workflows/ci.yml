@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: backend
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install project and test tools
+        run: python -m pip install -e '.[dev]'
+
+      - name: Validate configuration
+        run: >-
+          python -m kindle_brief.cli validate
+          --config config/config.example.yaml
+          --feeds config/feeds.yaml
+
+      - name: Lint Python
+        run: python -m ruff check backend tests
+
+      - name: Check Python formatting
+        run: python -m ruff format --check backend tests
+
+      - name: Check shell syntax
+        run: find kindle -type f -name '*.sh' -print0 | xargs -0 -n 1 sh -n
+
+      - name: Run test suite
+        run: python -m pytest
+
+      - name: Render deterministic demo
+        run: >-
+          python -m kindle_brief.cli preview
+          --config config/config.example.yaml
+          --feeds config/feeds.yaml
+          --output /tmp/kindle-brief-preview
+          --demo
+
+      - name: Build deterministic static release
+        run: >-
+          python -m kindle_brief.cli build
+          --config config/config.example.yaml
+          --feeds config/feeds.yaml
+          --output /tmp/kindle-brief-public
+          --demo
+
+      - name: Package Kindle runtime
+        env:
+          KINDLE_BRIEF_PAGES_DIR: /tmp/kindle-brief-preview
+        run: ./kindle/install/package.sh /tmp/kindle-brief-package

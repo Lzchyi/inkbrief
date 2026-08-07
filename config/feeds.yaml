@@ -1,0 +1,133 @@
+version: 1
+verified_at: "2026-08-07"
+
+feeds:
+  - id: bernama
+    name: Bernama
+    url: https://www.bernama.com/en/rssfeed.php
+    category: malaysia
+    attribution: Bernama
+    enabled: true
+    missing_date_policy: first_seen
+  - id: fmt_nation
+    name: Free Malaysia Today · Nation
+    url: https://www.freemalaysiatoday.com/category/nation/feed/
+    category: malaysia
+    attribution: Free Malaysia Today
+    enabled: true
+  - id: malaysiakini_news
+    name: Malaysiakini · News
+    url: https://www.malaysiakini.com/rss/en/news.rss
+    category: malaysia
+    attribution: Malaysiakini
+    enabled: true
+  - id: bursa_newsroom
+    name: Bursa Malaysia · Corporate Newsroom
+    url: https://bursa.listedcompany.com/newsroom_rss.html
+    category: business
+    attribution: Bursa Malaysia
+    enabled: true
+  - id: openai_news
+    name: OpenAI News
+    url: https://openai.com/news/rss.xml
+    category: ai_tech
+    attribution: OpenAI
+    enabled: true
+  - id: google_ai
+    name: Google AI
+    url: https://blog.google/innovation-and-ai/technology/ai/rss/
+    category: ai_tech
+    attribution: Google
+    enabled: true
+  - id: deepmind
+    name: Google DeepMind
+    url: https://deepmind.google/blog/rss.xml
+    category: ai_tech
+    attribution: Google DeepMind
+    enabled: true
+  - id: hugging_face
+    name: Hugging Face
+    url: https://huggingface.co/blog/feed.xml
+    category: ai_tech
+    attribution: Hugging Face
+    enabled: true
+    guid_link_fallback: true
+  - id: apple_developer_news
+    name: Apple Developer News
+    url: https://developer.apple.com/news/rss/news.rss
+    category: apple_dev
+    attribution: Apple Developer
+    enabled: true
+  - id: apple_developer_releases
+    name: Apple Developer Releases
+    url: https://developer.apple.com/news/releases/rss/releases.rss
+    category: apple_dev
+    attribution: Apple Developer
+    enabled: true
+  - id: swift
+    name: Swift.org
+    url: https://www.swift.org/atom.xml
+    category: apple_dev
+    attribution: Swift.org
+    enabled: true
+  - id: ars
+    name: Ars Technica
+    url: https://feeds.arstechnica.com/arstechnica/index
+    category: ai_tech
+    attribution: Ars Technica
+    enabled: true
+  - id: techcrunch
+    name: TechCrunch
+    url: https://techcrunch.com/feed/
+    category: ai_tech
+    attribution: TechCrunch
+    enabled: true
+  - id: verge
+    name: The Verge
+    url: https://www.theverge.com/rss/index.xml
+    category: ai_tech
+    attribution: The Verge
+    enabled: true
+  - id: fia_news
+    name: FIA News
+    url: https://www.fia.com/rss/news
+    category: f1
+    attribution: Fédération Internationale de l'Automobile
+    enabled: true
+  - id: motorsport_f1
+    name: Motorsport.com · Formula 1
+    url: https://www.motorsport.com/rss/f1/news/
+    category: f1
+    attribution: Motorsport.com
+    enabled: true
+  - id: bbc_f1
+    name: BBC Sport · Formula 1
+    url: https://feeds.bbci.co.uk/sport/formula1/rss.xml
+    category: f1
+    attribution: BBC Sport
+    enabled: true
+  - id: nasa
+    name: NASA
+    url: https://www.nasa.gov/feed/
+    category: science
+    attribution: NASA
+    enabled: true
+  - id: esa_space
+    name: ESA · Space News
+    url: https://www.esa.int/rssfeed/Our_Activities/Space_News
+    category: science
+    attribution: European Space Agency
+    enabled: true
+  - id: esa_science
+    name: ESA · Space Science
+    url: https://www.esa.int/rssfeed/Our_Activities/Space_Science
+    category: science
+    attribution: European Space Agency
+    enabled: true
+
+known_gaps:
+  insurance: No dependable official BNM or LIAM RSS feed was verified on 2026-08-07.
+  disabled_sources:
+    - The Star RSS directory currently points to 404 feeds.
+    - Malay Mail advertised feeds currently return 403.
+    - Anthropic has no verified direct RSS feed.

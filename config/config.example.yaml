@@ -1,0 +1,59 @@
+version: 1
+
+location:
+  name: Kuala Lumpur
+  latitude: 3.1390
+  longitude: 101.6869
+  timezone: Asia/Kuala_Lumpur
+
+favorites:
+  - name: Kuala Lumpur
+    latitude: 3.1390
+    longitude: 101.6869
+    timezone: Asia/Kuala_Lumpur
+  - name: Kuala Kubu Bharu
+    latitude: 3.5658
+    longitude: 101.6578
+    timezone: Asia/Kuala_Lumpur
+  - name: Sekinchan
+    latitude: 3.5063
+    longitude: 101.1027
+    timezone: Asia/Kuala_Lumpur
+
+device:
+  profile: kt5
+
+refresh:
+  dashboard_minutes: 60
+  morning_brief_local_time: "07:00"
+  request_timeout_seconds: 20
+  max_stale_hours: 72
+
+ai:
+  provider: fallback
+  model: ""
+  max_stories: 8
+
+news:
+  max_age_hours: 36
+  headline_limit: 15
+  category_weights:
+    malaysia: 10
+    ai_tech: 9
+    apple_dev: 8
+    business: 8
+    insurance: 7
+    science: 6
+    f1: 5
+    travel: 3
+
+pages:
+  home: true
+  weather: true
+  f1: true
+  morning_brief: true
+  headlines: true
+
+publishing:
+  base_url: ""
+  profile: kt5

@@ -1,0 +1,17 @@
+id: kt5
+name: Kindle (11th generation, 2022)
+model_code: KT5
+width: 1072
+height: 1448
+dpi: 300
+orientation: portrait
+grayscale_bits: 4
+touch:
+  rotation: 0
+  mirror_x: false
+  mirror_y: false
+  # Confirm these raw limits using kindle/install/probe.sh after jailbreak.
+  raw_min_x: null
+  raw_max_x: null
+  raw_min_y: null
+  raw_max_y: null
