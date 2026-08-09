@@ -52,10 +52,23 @@ def test_custom_icon_assets_cover_weather_and_motorsport_states() -> None:
     assert weather.getextrema()[0] <= 5
     assert weather.getextrema()[1] == 255
 
-    for name in ("helmet-compact", "car-compact", "calendar", "countdown", "trophy"):
+    for name in (
+        "helmet-compact",
+        "helmet-compact-alt",
+        "car-compact",
+        "car-compact-alt",
+        "calendar",
+        "countdown",
+        "trophy",
+    ):
         asset = icons.motorsport_asset(name, 54)
         assert asset.mode == "L"
         assert asset.size == (54, 54)
+
+    for name in ("moonrise", "moonset"):
+        asset = icons.moon_horizon_asset(name, 76)
+        assert asset.mode == "L"
+        assert asset.size == (76, 76)
 
 
 def test_every_cropped_icon_set_asset_is_present_and_readable() -> None:
@@ -97,12 +110,16 @@ def test_every_cropped_icon_set_asset_is_present_and_readable() -> None:
         with Image.open(moon_dir / f"{name}.png") as phase:
             assert phase.size == (512, 512)
             assert phase.mode == "RGBA"
+    for name in ("moonrise", "moonset"):
+        assert icons.moon_horizon_asset(name, 32).size == (32, 32)
 
     motorsport_names = (
         "helmet",
         "helmet-compact",
+        "helmet-compact-alt",
         "car",
         "car-compact",
+        "car-compact-alt",
         "checkered-flag",
         "calendar",
         "countdown",

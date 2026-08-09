@@ -24,10 +24,11 @@ backup_firmware=$(kb_host_firmware "$backup_path")
 # --dry-run is mandatory: this command compares the live USB volume to the
 # backup but cannot copy or delete anything. These are only regenerated Kindle
 # or macOS caches; documents, Calibre metadata, and user content are included.
-differences=$(rsync \
+raw_differences=$(rsync \
     --archive \
+    --no-times \
+    --checksum \
     --dry-run \
-    --size-only \
     --omit-dir-times \
     --delete \
     --itemize-changes \
@@ -35,12 +36,23 @@ differences=$(rsync \
     --exclude='/.fseventsd/***' \
     --exclude='/.Trashes/***' \
     --exclude='/.bcache/***' \
+    --exclude='/.active_content_sandbox/store/resource/cachedResources/***' \
     --exclude='/documents/.cache/kf8/***' \
     --exclude='/system/Search Indexes/***' \
     --exclude='/system/thumbnails/***' \
     --exclude='/system/kf8/***' \
     --exclude='/system/fmcache/***' \
     "$mount_path/" "$backup_path/")
+
+# Some host rsync builds still itemize an identical-size regular file when
+# only its FAT-visible modification time differs. They can also warn that the
+# known excluded Store-cache ancestors cannot be deleted. Discard only those
+# exact cases; any content, size, mode, ownership, path, or other deletion
+# change remains.
+differences=$(printf '%s\n' "$raw_differences" | sed \
+    -e '/^\.f\.\.[tT]\.* /d' \
+    -e '/\/\.active_content_sandbox\/store.*: not empty, cannot delete$/d' \
+    -e '/\/\.active_content_sandbox: not empty, cannot delete$/d')
 
 if [ -n "$differences" ]; then
     printf '%s\n' "Backup differs from the mounted Kindle:" >&2

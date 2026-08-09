@@ -93,7 +93,7 @@ def demo_snapshot() -> DashboardSnapshot:
         season=2026,
         round_number=12,
         event_name="Dutch Grand Prix",
-        circuit_name="Circuit Park Zandvoort",
+        circuit_name="Circuit Zandvoort",
         sessions=sessions,
         driver_standings=(
             Standing(1, "NOR", "Lando Norris", 245),

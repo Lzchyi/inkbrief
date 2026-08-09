@@ -60,7 +60,8 @@ environment. Starting the dashboard:
 3. Starts an independent maximum-runtime failsafe.
 4. Starts the touch controller, which discovers and exclusively grabs the
    touch input only while the dashboard is active.
-5. Draws one page at a time with a full GC16 refresh.
+5. Draws one page at a time: flashing GC16 on launch and every fifth page
+   change, with non-flashing GL16 grayscale updates in between.
 6. Releases input and asks the stock Home UI to return on every normal or
    trapped exit.
 

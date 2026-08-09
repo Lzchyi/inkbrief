@@ -97,11 +97,10 @@ independent host check makes deployment errors easier to diagnose.
 ## Backup acceptance
 
 Before SpringBreak or installation, verify the pre-jailbreak backup by path,
-size, and, for higher assurance, a separate read-only checksum comparison.
-`kindle/install/verify-backup.sh` performs a dry-run path/size comparison,
-accounts for FAT directory timestamp differences, and excludes only documented
-regenerated indexes/caches. Do not judge backup completeness solely by Finder's
-item count.
+size, and content. `kindle/install/verify-backup.sh` performs a read-only,
+checksum-based dry run, accounts for FAT directory timestamp differences, and
+excludes only documented regenerated indexes/caches. Do not judge backup
+completeness solely by Finder's item count.
 
 For the audited KT5 and its existing dated backup:
 
@@ -122,6 +121,11 @@ safe eject:
   five pages.
 - Start displays Home without stopping the stock framework.
 - Left/right swipes traverse all five pages and wrap predictably.
+- The initial page flashes, the next four page changes use low-flash grayscale,
+  and the fifth change performs a full cleanup flash.
+- Two complete loops in both directions show no accumulating ghosts around
+  white space, thin rules, moon imagery, or CJK text.
+- Rapid swipes never tear or combine stale and current page content.
 - The visible top-left HOME target returns to stock Home/Library.
 - A three-second top-right hold also exits.
 - KUAL Stop exits a running dashboard.
@@ -132,6 +136,8 @@ safe eject:
 - Calibre reconnects with prior metadata intact.
 - No Kindle Brief document appears in the Library.
 - A normal restart does not autostart the dashboard.
+- If ghosting appears before the fifth change, lower `full_refresh_every` to
+  `3` or `1`; use `1` if GL16 is unreliable on the installed FBInk build.
 
 Do not automate these physical gates or claim success before observing them on
 the exact KT5 device.

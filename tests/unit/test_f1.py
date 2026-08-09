@@ -156,7 +156,7 @@ def test_demo_snapshot_uses_next_official_2026_weekend() -> None:
     assert (f1.event_name, f1.circuit_id, f1.circuit_name) == (
         "Dutch Grand Prix",
         "zandvoort",
-        "Circuit Park Zandvoort",
+        "Circuit Zandvoort",
     )
     assert [(session.name, session.starts_at.isoformat()) for session in f1.sessions] == [
         ("Practice 1", "2026-08-21T10:30:00+00:00"),
@@ -212,6 +212,7 @@ def test_parses_sprint_weekend_without_assuming_fp2_or_fp3() -> None:
 
     assert snapshot.event_name == "Dutch Grand Prix"
     assert snapshot.circuit_id == "zandvoort"
+    assert snapshot.circuit_name == "Circuit Zandvoort"
     assert [session.name for session in snapshot.sessions] == [
         "FP1",
         "Sprint Qualifying",

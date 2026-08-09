@@ -98,7 +98,12 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
 
     f1 = snapshot.f1
     f1_top = y + scaled(32, width)
-    label(canvas, margin, f1_top, "Formula 1")
+    f1_label_icon_size = scaled(30, width)
+    canvas.paste(
+        icons.motorsport_asset("trophy", f1_label_icon_size),
+        (margin, f1_top - scaled(6, width)),
+    )
+    label(canvas, margin + scaled(41, width), f1_top, "Formula 1")
     if f1 is None:
         canvas.text((margin, f1_top + scaled(42, width)), "Schedule unavailable", size=26)
         y = f1_top + scaled(150, width)
@@ -128,15 +133,23 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
             )
         rows_y = f1_top + scaled(140, width)
         icon_size = scaled(54, width)
-        canvas.paste(icons.motorsport_asset("helmet-compact", icon_size), (margin, rows_y))
+        canvas.paste(
+            icons.motorsport_asset("helmet-compact-alt", icon_size),
+            (margin, rows_y),
+        )
         driver_text = "   ·   ".join(
             f"{standing.code} {standing.points:g}" for standing in f1.driver_standings[:3]
         )
         canvas.text(
-            (margin + scaled(70, width), rows_y + scaled(4, width)), driver_text or "—", size=22
+            (margin + scaled(70, width), rows_y + scaled(4, width)),
+            driver_text or "—",
+            size=22,
         )
         rows_y += scaled(60, width)
-        canvas.paste(icons.motorsport_asset("car-compact", icon_size), (margin, rows_y))
+        canvas.paste(
+            icons.motorsport_asset("car-compact-alt", icon_size),
+            (margin, rows_y),
+        )
         constructor_text = "   ·   ".join(
             f"{standing.code} {standing.points:g}" for standing in f1.constructor_standings[:3]
         )

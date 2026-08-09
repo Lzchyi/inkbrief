@@ -14,7 +14,7 @@ fi
 
 sleep 1
 if kb_fbink=$(kb_find_fbink 2>/dev/null); then
-    "$kb_fbink" -q -f -W GC16 -s >/dev/null 2>&1 || true
+    "$kb_fbink" -q -w -f -W GC16 -s >/dev/null 2>&1 || true
 fi
 
 exit 0

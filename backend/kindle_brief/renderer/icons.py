@@ -50,12 +50,12 @@ def _asset(relative_path: str) -> Image.Image:
         return image.convert("RGBA")
 
 
-def raster_asset(relative_path: str, size: int) -> Image.Image:
+def raster_asset(relative_path: str, size: int, *, background: int = PAPER) -> Image.Image:
     if size <= 0:
         raise ValueError("icon size must be positive")
     source = _asset(relative_path).resize((size, size), Image.Resampling.LANCZOS)
     gray = ImageOps.grayscale(source.convert("RGB"))
-    result = Image.new("L", (size, size), PAPER)
+    result = Image.new("L", (size, size), background)
     result.paste(gray, (0, 0), source.getchannel("A"))
     return result
 
@@ -108,7 +108,7 @@ def weather_asset(
     return raster_asset(f"weather/icons/{name}.png", size)
 
 
-def motorsport_asset(name: str, size: int) -> Image.Image:
+def motorsport_asset(name: str, size: int, *, background: int = PAPER) -> Image.Image:
     if name not in {
         "helmet",
         "car",
@@ -119,10 +119,18 @@ def motorsport_asset(name: str, size: int) -> Image.Image:
         "podium",
         "track",
         "helmet-compact",
+        "helmet-compact-alt",
         "car-compact",
+        "car-compact-alt",
     }:
         raise ValueError(f"unknown motorsport icon: {name}")
-    return raster_asset(f"icons/motorsport/{name}.png", size)
+    return raster_asset(f"icons/motorsport/{name}.png", size, background=background)
+
+
+def moon_horizon_asset(name: str, size: int) -> Image.Image:
+    if name not in {"moonrise", "moonset"}:
+        raise ValueError(f"unknown moon horizon icon: {name}")
+    return raster_asset(f"moon/horizons/{name}.png", size)
 
 
 def _scale(points: Sequence[Point], box: tuple[int, int, int, int]) -> list[Point]:

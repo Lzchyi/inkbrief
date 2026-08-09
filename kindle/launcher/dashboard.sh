@@ -10,6 +10,7 @@ max_runtime=1800
 home_width=180
 home_height=110
 corner_hold_ms=3000
+full_refresh_every=5
 touch_device=
 touch_swap_axes=0
 touch_invert_x=0
@@ -21,7 +22,7 @@ if [ -r "$KB_APP_ROOT/config/runtime.conf" ]; then
     . "$KB_APP_ROOT/config/runtime.conf"
 fi
 for kb_number in "$screen_width" "$screen_height" "$max_runtime" \
-    "$home_width" "$home_height" "$corner_hold_ms"
+    "$home_width" "$home_height" "$corner_hold_ms" "$full_refresh_every"
 do
     kb_positive_integer "$kb_number" || {
         kb_log "invalid numeric runtime configuration"
@@ -30,6 +31,10 @@ do
 done
 [ "$max_runtime" -le 28800 ] || {
     kb_log "max_runtime may not exceed 28800 seconds"
+    exit 2
+}
+[ "$full_refresh_every" -le 5 ] || {
+    kb_log "full_refresh_every may not exceed 5 page changes"
     exit 2
 }
 for kb_boolean in "$touch_swap_axes" "$touch_invert_x" "$touch_invert_y"; do
@@ -138,23 +143,35 @@ controller_pid=$!
 printf '%s\n' "$controller_pid" > "$KB_CONTROLLER_PID_FILE"
 
 page_index=1
+page_changes=0
 show_page() {
+    refresh_mode=$1
     page_path=$(sed -n "${page_index}p" "$pages_file")
-    /bin/sh "$KB_APP_ROOT/bin/fbink-display.sh" "$page_path"
+    /bin/sh "$KB_APP_ROOT/bin/fbink-display.sh" "$page_path" "$refresh_mode"
 }
-show_page
+advance_refresh_mode() {
+    page_changes=$((page_changes + 1))
+    if [ $((page_changes % full_refresh_every)) -eq 0 ]; then
+        refresh_mode=full
+    else
+        refresh_mode=partial
+    fi
+}
+show_page full
 
 while IFS= read -r event; do
     case "$event" in
         NEXT)
             page_index=$((page_index + 1))
             [ "$page_index" -le "$page_count" ] || page_index=1
-            show_page
+            advance_refresh_mode
+            show_page "$refresh_mode"
             ;;
         PREVIOUS)
             page_index=$((page_index - 1))
             [ "$page_index" -ge 1 ] || page_index=$page_count
-            show_page
+            advance_refresh_mode
+            show_page "$refresh_mode"
             ;;
         HOME|TIMEOUT)
             break

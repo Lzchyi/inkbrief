@@ -13,15 +13,31 @@ image=${1:-}
     kb_log "page image is missing or unreadable"
     exit 2
 }
+refresh_mode=${2:-full}
+case "$refresh_mode" in
+    full|partial) ;;
+    *)
+        kb_log "refresh mode must be full or partial"
+        exit 2
+        ;;
+esac
 
 fbink=$(kb_find_fbink) || {
     kb_log "FBInk not found in hdnext (/var/local/kmc/bin), libkh, or PATH"
     exit 3
 }
 
-# Draw into the framebuffer without refreshing, then issue one full GC16
-# refresh. Every rendered page already carries the high-contrast house icon
-# matching the controller's generous top-left hotspot.
+# Draw into the framebuffer without refreshing, then submit exactly one screen
+# update. GL16 requests 16-level output without a black flash between page
+# swipes; periodic flashing GC16 updates clear accumulated ghosting.
 "$fbink" -q -b -c -i "$image" \
     -g halign=CENTER,valign=CENTER,w=-1,h=-1,dither
-"$fbink" -q -f -W GC16 -s
+case "$refresh_mode" in
+    full) "$fbink" -q -w -f -W GC16 -s ;;
+    partial)
+        if ! "$fbink" -q -w -W GL16 -s; then
+            kb_log "GL16 refresh failed; retrying with flashing GC16"
+            "$fbink" -q -w -f -W GC16 -s
+        fi
+        ;;
+esac

@@ -74,7 +74,17 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
     upcoming = next_session(f1.sessions, snapshot.generated_at)
     info_x = scaled(635, width)
     if upcoming:
-        label(canvas, info_x, hero_top + scaled(58, width), "Next session")
+        next_icon_size = scaled(46, width)
+        canvas.paste(
+            icons.motorsport_asset("countdown", next_icon_size, background=PANEL),
+            (info_x, hero_top + scaled(48, width)),
+        )
+        label(
+            canvas,
+            info_x + scaled(58, width),
+            hero_top + scaled(62, width),
+            "Next session",
+        )
         name, name_size = canvas.fit_text(
             upcoming.name,
             width - margin - info_x,
@@ -102,7 +112,12 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
         canvas.text((info_x, hero_top + scaled(125, width)), "Weekend complete", size=28)
 
     y = hero_bottom + scaled(38, width)
-    label(canvas, margin, y, "Weekend schedule · MYT")
+    schedule_icon_size = scaled(32, width)
+    canvas.paste(
+        icons.motorsport_asset("calendar", schedule_icon_size),
+        (margin, y - scaled(7, width)),
+    )
+    label(canvas, margin + scaled(43, width), y, "Weekend schedule · MYT")
     schedule_top = y + scaled(43, width)
     sessions = f1.sessions[:6]
     row_height = scaled(55, width)
@@ -122,11 +137,23 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
         canvas.text((scaled(350, width), row_y), session.name, size=22)
         if upcoming and session.starts_at == upcoming.starts_at:
             canvas.text(
-                (width - margin - scaled(18, width), row_y),
+                (
+                    width - margin - scaled(55 if session.name == "Race" else 18, width),
+                    row_y,
+                ),
                 "NEXT",
                 size=15,
                 anchor="ra",
                 stroke_width=1,
+            )
+        if session.name == "Race":
+            race_icon_size = scaled(30, width)
+            canvas.paste(
+                icons.motorsport_asset("checkered-flag", race_icon_size),
+                (
+                    width - margin - race_icon_size,
+                    row_y - scaled(7, width),
+                ),
             )
     y = schedule_top + len(sessions) * row_height + scaled(22, width)
     canvas.rule(y)
@@ -141,6 +168,18 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
     canvas.paste(
         icons.motorsport_asset("car-compact", standings_icon_size),
         (half + scaled(12, width), standings_top),
+    )
+    canvas.text(
+        (margin + scaled(63, width), standings_top + scaled(15, width)),
+        "DRIVERS",
+        size=15,
+        fill=MUTED,
+    )
+    canvas.text(
+        (half + scaled(76, width), standings_top + scaled(15, width)),
+        "CONSTRUCTORS",
+        size=15,
+        fill=MUTED,
     )
     for index, standing in enumerate(f1.driver_standings[:3]):
         row_y = standings_top + scaled(64 + index * 48, width)

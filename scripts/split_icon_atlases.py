@@ -87,7 +87,9 @@ def crop_compact_motorsport(source_path: Path, output_dir: Path) -> None:
         raise ValueError(f"unexpected F1 source-sheet dimensions: {source.size}")
     boxes = {
         "helmet-compact": (95, 592, 249, 736),
+        "helmet-compact-alt": (318, 590, 476, 742),
         "car-compact": (588, 599, 812, 720),
+        "car-compact-alt": (839, 596, 1043, 721),
     }
     output_dir.mkdir(parents=True, exist_ok=True)
     for name, box in boxes.items():
@@ -162,6 +164,16 @@ def main() -> None:
             "waning-crescent",
         ),
         output_dir=ROOT / "assets/moon/phases",
+        size=512,
+    )
+
+    moon_horizons = prepare_atlas(ROOT / "assets/moon/horizon-atlas.png")
+    split_grid(
+        moon_horizons,
+        columns=2,
+        rows=1,
+        names=("moonrise", "moonset"),
+        output_dir=ROOT / "assets/moon/horizons",
         size=512,
     )
 

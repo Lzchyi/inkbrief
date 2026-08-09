@@ -161,15 +161,35 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
             size=20,
             fill=SECONDARY,
         )
-        canvas.text(
-            (margin + scaled(200, width), sky_top + scaled(140, width)),
-            (
-                f"Moonrise {clock(astronomy.moonrise, snapshot.timezone)} · "
-                f"Moonset {clock(astronomy.moonset, snapshot.timezone)}"
-            ),
-            size=19,
-            fill=SECONDARY,
+        horizon_size = scaled(76, width)
+        horizon_y = sky_top + scaled(139, width)
+        moonrise_x = margin + scaled(175, width)
+        moonset_x = margin + scaled(385, width)
+        canvas.paste(
+            icons.moon_horizon_asset("moonrise", horizon_size),
+            (moonrise_x, horizon_y),
         )
+        canvas.paste(
+            icons.moon_horizon_asset("moonset", horizon_size),
+            (moonset_x, horizon_y),
+        )
+        for scene_x, title, event_time in (
+            (moonrise_x, "Moonrise", astronomy.moonrise),
+            (moonset_x, "Moonset", astronomy.moonset),
+        ):
+            text_x = scene_x + scaled(80, width)
+            canvas.text(
+                (text_x, horizon_y + scaled(12, width)),
+                title,
+                size=14,
+                fill=MUTED,
+            )
+            canvas.text(
+                (text_x, horizon_y + scaled(39, width)),
+                clock(event_time, snapshot.timezone),
+                size=20,
+                fill=SECONDARY,
+            )
         sun_x = scaled(690, width)
         canvas.text((sun_x, sky_top + scaled(53, width)), "Sunrise", size=17, fill=MUTED)
         canvas.text(

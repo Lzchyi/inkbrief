@@ -23,9 +23,16 @@ assert a third-party licence. Circuit geometry retains its own attribution in
 
 All five pages share a centered date/time/lunar header and a visible HOME area.
 The page renderer also emits `hotspots.json` so tests can verify geometry
-without relying on visual judgment alone. The Kindle display wrapper redraws a
-high-contrast HOME target in the same top-left bounds before one full GC16
-refresh.
+without relying on visual judgment alone. Every page carries a high-contrast
+HOME target in the same top-left bounds. The Kindle display wrapper loads the
+complete page without refreshing, then submits one update: flashing GC16 on
+launch and every fifth page change, or non-flashing GL16 in between. This
+requests low-flash 16-level updates while periodically clearing ghosting; the
+bounded cadence is configurable from one to five page changes in the
+package-owned `runtime.conf`.
+Each update waits for the panel controller to finish before another page can
+be drawn. If a GL16 request fails, the wrapper retries that framebuffer with a
+flashing GC16 cleanup.
 
 Pages are fixed images, not HTML:
 

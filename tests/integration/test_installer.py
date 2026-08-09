@@ -305,10 +305,16 @@ def test_backup_verifier_is_read_only_and_excludes_only_regenerated_caches(
     mount = _make_fake_mount(tmp_path, "Backup Source Kindle")
     backup = tmp_path / "backup"
     shutil.copytree(mount, backup)
+    store_cache = (
+        backup / ".active_content_sandbox" / "store" / "resource" / "cachedResources" / "index.html"
+    )
+    store_cache.parent.mkdir(parents=True)
+    store_cache.write_bytes(b"regenerated store page")
     regenerated = mount / "system" / "thumbnails" / "new-thumbnail.jpg"
     regenerated.parent.mkdir()
     regenerated.write_bytes(b"regenerated")
     os.utime(mount / "documents", (1_700_000_000, 1_700_000_000))
+    os.utime(mount / "documents" / "existing-book.azw3", (1_700_000_000, 1_700_000_000))
     before = {
         path.relative_to(mount): path.read_bytes() for path in mount.rglob("*") if path.is_file()
     }
@@ -320,10 +326,31 @@ def test_backup_verifier_is_read_only_and_excludes_only_regenerated_caches(
         path.relative_to(mount): path.read_bytes() for path in mount.rglob("*") if path.is_file()
     } == before
 
+    persistent_mount = (
+        mount / ".active_content_sandbox" / "store" / "resource" / "persistent" / "state"
+    )
+    persistent_backup = backup / persistent_mount.relative_to(mount)
+    persistent_mount.parent.mkdir(parents=True)
+    persistent_backup.parent.mkdir(parents=True)
+    persistent_mount.write_bytes(b"current1")
+    persistent_backup.write_bytes(b"current2")
+    store_mismatch = _run(VERIFY_BACKUP_SCRIPT, mount, backup)
+    assert store_mismatch.returncode == 1
+    assert ".active_content_sandbox/store/resource/persistent/state" in store_mismatch.stderr
+    persistent_mount.write_bytes(persistent_backup.read_bytes())
+
     (mount / "documents" / "existing-book.azw3").write_bytes(b"changed size")
     mismatch = _run(VERIFY_BACKUP_SCRIPT, mount, backup)
     assert mismatch.returncode == 1
     assert "documents/existing-book.azw3" in mismatch.stderr
+
+    backed_up_book = backup / "documents" / "existing-book.azw3"
+    mounted_book = mount / "documents" / "existing-book.azw3"
+    mounted_book.write_bytes(backed_up_book.read_bytes().translate(bytes.maketrans(b"u", b"v")))
+    assert mounted_book.stat().st_size == backed_up_book.stat().st_size
+    same_size_mismatch = _run(VERIFY_BACKUP_SCRIPT, mount, backup)
+    assert same_size_mismatch.returncode == 1
+    assert "documents/existing-book.azw3" in same_size_mismatch.stderr
 
 
 def test_host_release_is_directly_consumable_by_posix_updater(tmp_path: Path) -> None:
@@ -674,7 +701,7 @@ def test_dashboard_and_diagnostics_fall_back_to_owned_previous_cache(tmp_path: P
     display_log = tmp_path / "display.log"
     scripts = {
         "touch-controller": "#!/bin/sh\nprintf '%s\\n' TIMEOUT\n",
-        "fbink-display.sh": '#!/bin/sh\nprintf \'%s\\n\' "$1" >> "$DISPLAY_LOG"\n',
+        "fbink-display.sh": ('#!/bin/sh\nprintf \'%s|%s\\n\' "$1" "$2" >> "$DISPLAY_LOG"\n'),
         "failsafe.sh": "#!/bin/sh\nexit 0\n",
         "restore-ui.sh": "#!/bin/sh\nexit 0\n",
     }
@@ -707,11 +734,200 @@ def test_dashboard_and_diagnostics_fall_back_to_owned_previous_cache(tmp_path: P
     )
 
     assert dashboard.returncode == 0, dashboard.stderr
-    assert display_log.read_text(encoding="utf-8").splitlines()[0] == str(
-        previous_pages / "home.png"
+    assert display_log.read_text(encoding="utf-8").splitlines()[0] == (
+        f"{previous_pages / 'home.png'}|full"
     )
     assert diagnostics.returncode == 0, diagnostics.stderr
     assert "Pages: 5/5" in diagnostics.stdout
+
+
+@pytest.mark.parametrize(
+    ("runtime_config", "events", "expected_returncode", "expected_modes", "error"),
+    (
+        (
+            None,
+            "NEXT NEXT NEXT NEXT NEXT TIMEOUT",
+            0,
+            ("full", "partial", "partial", "partial", "partial", "full"),
+            "",
+        ),
+        (
+            "full_refresh_every=1\n",
+            "NEXT NEXT TIMEOUT",
+            0,
+            ("full", "full", "full"),
+            "",
+        ),
+        (
+            "full_refresh_every=0\n",
+            "TIMEOUT",
+            2,
+            (),
+            "invalid numeric runtime configuration",
+        ),
+        (
+            "full_refresh_every=fast\n",
+            "TIMEOUT",
+            2,
+            (),
+            "invalid numeric runtime configuration",
+        ),
+        (
+            "full_refresh_every=6\n",
+            "TIMEOUT",
+            2,
+            (),
+            "full_refresh_every may not exceed 5 page changes",
+        ),
+    ),
+)
+def test_dashboard_uses_bounded_periodic_full_refreshes(
+    tmp_path: Path,
+    runtime_config: str | None,
+    events: str,
+    expected_returncode: int,
+    expected_modes: tuple[str, ...],
+    error: str,
+) -> None:
+    app_root = tmp_path / "runtime-app"
+    bin_dir = app_root / "bin"
+    pages_dir = app_root / "pages"
+    config_dir = app_root / "config"
+    bin_dir.mkdir(parents=True)
+    pages_dir.mkdir()
+    config_dir.mkdir()
+    for script in ("common.sh", "dashboard.sh"):
+        shutil.copy2(REPO_ROOT / "kindle" / "launcher" / script, bin_dir / script)
+    for page_id in ("home", "weather", "f1", "morning-brief", "headlines"):
+        (pages_dir / f"{page_id}.png").write_bytes(b"page")
+    if runtime_config is not None:
+        (config_dir / "runtime.conf").write_text(runtime_config, encoding="ascii")
+    display_log = tmp_path / "display.log"
+    scripts = {
+        "touch-controller": f"#!/bin/sh\nprintf '%s\\n' {events}\n",
+        "fbink-display.sh": ('#!/bin/sh\nprintf \'%s|%s\\n\' "$1" "$2" >> "$DISPLAY_LOG"\n'),
+        "failsafe.sh": "#!/bin/sh\nexit 0\n",
+        "restore-ui.sh": "#!/bin/sh\nexit 0\n",
+    }
+    for name, content in scripts.items():
+        path = bin_dir / name
+        path.write_text(content, encoding="ascii")
+        path.chmod(0o755)
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "DISPLAY_LOG": str(display_log),
+            "KINDLE_BRIEF_ROOT": str(app_root),
+            "KINDLE_BRIEF_STATE_DIR": str(tmp_path / "runtime-state"),
+        }
+    )
+
+    dashboard = subprocess.run(
+        ["/bin/sh", str(bin_dir / "dashboard.sh")],
+        capture_output=True,
+        text=True,
+        env=environment,
+        timeout=10,
+    )
+
+    assert dashboard.returncode == expected_returncode, dashboard.stderr
+    if expected_returncode:
+        assert error in dashboard.stderr
+        assert not display_log.exists()
+    else:
+        modes = tuple(
+            line.rsplit("|", 1)[1] for line in display_log.read_text(encoding="utf-8").splitlines()
+        )
+        assert modes == expected_modes
+
+
+def test_fbink_display_selects_grayscale_and_cleanup_waveforms(tmp_path: Path) -> None:
+    app_root = tmp_path / "display-app"
+    bin_dir = app_root / "bin"
+    fake_bin = tmp_path / "fake-bin"
+    bin_dir.mkdir(parents=True)
+    fake_bin.mkdir()
+    shutil.copy2(REPO_ROOT / "kindle" / "launcher" / "common.sh", bin_dir)
+    shutil.copy2(REPO_ROOT / "kindle" / "display" / "fbink-display.sh", bin_dir)
+    shutil.copy2(REPO_ROOT / "kindle" / "launcher" / "restore-ui.sh", bin_dir)
+    image = tmp_path / "page.png"
+    image.write_bytes(b"page")
+    fbink_log = tmp_path / "fbink.log"
+    fake_fbink = fake_bin / "fbink"
+    fake_fbink.write_text(
+        (
+            '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$FBINK_LOG"\n'
+            'case "$*" in\n'
+            '    *"-W GL16"*) [ "${FAIL_GL16:-0}" -eq 0 ] || exit 9 ;;\n'
+            "esac\n"
+        ),
+        encoding="ascii",
+    )
+    fake_fbink.chmod(0o755)
+    fake_sleep = fake_bin / "sleep"
+    fake_sleep.write_text("#!/bin/sh\nexit 0\n", encoding="ascii")
+    fake_sleep.chmod(0o755)
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "FBINK_LOG": str(fbink_log),
+            "KINDLE_BRIEF_ROOT": str(app_root),
+            "PATH": f"{fake_bin}:{environment['PATH']}",
+            "FAIL_GL16": "0",
+        }
+    )
+    script = bin_dir / "fbink-display.sh"
+
+    default_full = subprocess.run(
+        ["/bin/sh", str(script), str(image)],
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    partial = subprocess.run(
+        ["/bin/sh", str(script), str(image), "partial"],
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    fallback_environment = environment.copy()
+    fallback_environment["FAIL_GL16"] = "1"
+    fallback = subprocess.run(
+        ["/bin/sh", str(script), str(image), "partial"],
+        capture_output=True,
+        text=True,
+        env=fallback_environment,
+    )
+    rejected = subprocess.run(
+        ["/bin/sh", str(script), str(image), "fast"],
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    restored = subprocess.run(
+        ["/bin/sh", str(bin_dir / "restore-ui.sh")],
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+    assert default_full.returncode == 0, default_full.stderr
+    assert partial.returncode == 0, partial.stderr
+    assert fallback.returncode == 0, fallback.stderr
+    assert "retrying with flashing GC16" in fallback.stderr
+    assert rejected.returncode == 2
+    assert "refresh mode must be full or partial" in rejected.stderr
+    assert restored.returncode == 0, restored.stderr
+    assert fbink_log.read_text(encoding="utf-8").splitlines() == [
+        (f"-q -b -c -i {image} -g halign=CENTER,valign=CENTER,w=-1,h=-1,dither"),
+        "-q -w -f -W GC16 -s",
+        (f"-q -b -c -i {image} -g halign=CENTER,valign=CENTER,w=-1,h=-1,dither"),
+        "-q -w -W GL16 -s",
+        (f"-q -b -c -i {image} -g halign=CENTER,valign=CENTER,w=-1,h=-1,dither"),
+        "-q -w -W GL16 -s",
+        "-q -w -f -W GC16 -s",
+        "-q -w -f -W GC16 -s",
+    ]
 
 
 def test_start_uses_cached_dashboard_when_launch_update_fails(tmp_path: Path) -> None:

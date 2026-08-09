@@ -25,13 +25,14 @@ source sheets with the built-in image-generation workflow. Local processing
 then removed the chroma-key/background and cropped, converted, padded, and
 normalized the transparent grayscale assets. The deterministic split/crop
 stage is implemented by `scripts/split_icon_atlases.py`. Its optional
-`--f1-sheet` input crops the simple alternate helmet and car at documented
-source-sheet coordinates for legibility in the 54-pixel standings rows.
+`--f1-sheet` input crops both simple alternate helmet and car variants at
+documented source-sheet coordinates for legibility in compact standings rows.
 
 | Production master | Dimensions | SHA-256 | Production output |
 | --- | ---: | --- | --- |
 | `assets/weather/atlas.png` | 1536×1024 | `42e9f9a07c255b158d19d6e4b5dcde0f94dba631f47118c559b189ecb4e72291` | `assets/weather/icons/` |
 | `assets/moon/phase-atlas.png` | 1254×1254 | `0296e99c824a263755cfb61cf524121466fe7aa48ff367703dfec5a551c11c56` | `assets/moon/phases/` |
+| `assets/moon/horizon-atlas.png` | 1774×887 | `3f17c9a73b7f43130fa96f8ad22d20a36382bc383d0771db048cf55cfd361f12` | `assets/moon/horizons/` |
 | `assets/icons/motorsport-atlas.png` | 1254×1254 | `fa677f3ca1b84380b01ca3c126c49b9af395076fdb8c402934b092979b50241c` | `assets/icons/motorsport/` |
 | `assets/icons/track-symbol.png` | 1536×1024 | `3858bcede4bf1461ed75e7d91ea40597f0cabc6f520091a78aad9f375da1841b` | `assets/icons/motorsport/track.png` |
 
@@ -48,6 +49,10 @@ background, followed by deterministic local cleanup. Prompt directions were:
   strict 6×3 grid, remove every label and header, and use a flat green field.
 - Moon: preserve the eight grayscale lunar textures in phase order on a strict
   4×2 grid, with no labels, ornaments, or typography, on a flat green field.
+- Moon horizons: preserve the supplied moonrise and moonset scenic motifs as a
+  strict two-cell atlas, remove all labels and page decoration, and use a flat
+  green field. The built-in reference-edit output was saved as
+  `assets/moon/horizon-atlas.png` after local chroma removal.
 - Motorsport: preserve only generic helmet, race car, flag, calendar,
   countdown, trophy, and podium motifs; exclude all logos and words; arrange a
   clean atlas on a flat green field.

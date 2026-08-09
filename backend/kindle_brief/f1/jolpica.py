@@ -44,6 +44,11 @@ _CONSTRUCTOR_CODES = {
     "williams": "WIL",
 }
 
+_OFFICIAL_CIRCUIT_NAMES = {
+    # Jolpica still carries the venue's older expanded label.
+    "zandvoort": "Circuit Zandvoort",
+}
+
 
 class F1DataError(ValueError):
     """Raised when a Jolpica response is incomplete or malformed."""
@@ -238,12 +243,14 @@ def parse_jolpica_snapshot(
 
     race = _next_race(race_payload)
     circuit = _mapping(race.get("Circuit"), "race.Circuit")
+    circuit_id = _optional_text(circuit.get("circuitId"))
+    source_circuit_name = _text(circuit.get("circuitName"), "race.Circuit.circuitName")
     return F1Snapshot(
         season=_integer(race.get("season"), "race.season"),
         round_number=_integer(race.get("round"), "race.round"),
         event_name=_text(race.get("raceName"), "race.raceName"),
-        circuit_name=_text(circuit.get("circuitName"), "race.Circuit.circuitName"),
-        circuit_id=_optional_text(circuit.get("circuitId")),
+        circuit_name=_OFFICIAL_CIRCUIT_NAMES.get(circuit_id, source_circuit_name),
+        circuit_id=circuit_id,
         sessions=_parse_sessions(race),
         driver_standings=_driver_standings(driver_payload),
         constructor_standings=_constructor_standings(constructor_payload),
