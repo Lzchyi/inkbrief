@@ -344,6 +344,38 @@ def test_backup_verifier_is_read_only_and_excludes_only_regenerated_caches(
     assert mismatch.returncode == 1
     assert "documents/existing-book.azw3" in mismatch.stderr
 
+
+def test_backup_verifier_filters_gnu_rsync_excluded_parent_diagnostics(tmp_path: Path) -> None:
+    mount = _make_fake_mount(tmp_path, "GNU Rsync Source Kindle")
+    backup = tmp_path / "backup"
+    shutil.copytree(mount, backup)
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_rsync = fake_bin / "rsync"
+    fake_rsync.write_text(
+        "#!/bin/sh\n"
+        "printf '%s\\n' "
+        "'  *deleting   .active_content_sandbox/store/resource/' "
+        "'  *deleting   .active_content_sandbox/store/' "
+        "'  cannot delete non-empty directory: .active_content_sandbox/store/resource' "
+        "'  cannot delete non-empty directory: .active_content_sandbox/store'\n",
+        encoding="ascii",
+    )
+    fake_rsync.chmod(0o755)
+    environment = os.environ.copy()
+    environment["KINDLE_BRIEF_ALLOW_FAKE_MOUNT"] = "1"
+    environment["PATH"] = f"{fake_bin}{os.pathsep}{environment['PATH']}"
+
+    clean = subprocess.run(
+        ["/bin/sh", str(VERIFY_BACKUP_SCRIPT), str(mount), str(backup)],
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+    assert clean.returncode == 0, clean.stderr
+    assert "matches" in clean.stdout
+
     backed_up_book = backup / "documents" / "existing-book.azw3"
     mounted_book = mount / "documents" / "existing-book.azw3"
     mounted_book.write_bytes(backed_up_book.read_bytes().translate(bytes.maketrans(b"u", b"v")))

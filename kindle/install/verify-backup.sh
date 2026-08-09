@@ -53,12 +53,12 @@ differences=$(printf '%s\n' "$raw_differences" | sed \
     -e '/^\.f\.\.[tT]\.* /d' \
     -e '/\/\.active_content_sandbox\/store.*: not empty, cannot delete$/d' \
     -e '/\/\.active_content_sandbox: not empty, cannot delete$/d' \
-    -e '/^cannot delete non-empty directory: \.active_content_sandbox\/store\/resource$/d' \
-    -e '/^cannot delete non-empty directory: \.active_content_sandbox\/store$/d' \
-    -e '/^cannot delete non-empty directory: \.active_content_sandbox$/d' \
-    -e '/^[*]deleting \.active_content_sandbox\/store\/resource\/$/d' \
-    -e '/^[*]deleting \.active_content_sandbox\/store\/$/d' \
-    -e '/^[*]deleting \.active_content_sandbox\/$/d')
+    -e '/^[[:space:]]*cannot delete non-empty directory:[[:space:]][[:space:]]*\.active_content_sandbox\/store\/resource[[:space:]]*$/d' \
+    -e '/^[[:space:]]*cannot delete non-empty directory:[[:space:]][[:space:]]*\.active_content_sandbox\/store[[:space:]]*$/d' \
+    -e '/^[[:space:]]*cannot delete non-empty directory:[[:space:]][[:space:]]*\.active_content_sandbox[[:space:]]*$/d' \
+    -e '/^[[:space:]]*[*]deleting[[:space:]][[:space:]]*\.active_content_sandbox\/store\/resource\/[[:space:]]*$/d' \
+    -e '/^[[:space:]]*[*]deleting[[:space:]][[:space:]]*\.active_content_sandbox\/store\/[[:space:]]*$/d' \
+    -e '/^[[:space:]]*[*]deleting[[:space:]][[:space:]]*\.active_content_sandbox\/[[:space:]]*$/d')
 
 if [ -n "$differences" ]; then
     printf '%s\n' "Backup differs from the mounted Kindle:" >&2
