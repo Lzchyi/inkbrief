@@ -28,8 +28,8 @@ def footer(
         text, font_size = canvas.fit_text(
             attribution,
             canvas.width - scaled(170, canvas.width),
-            size=15,
-            minimum=12,
+            size=17,
+            minimum=14,
         )
         canvas.draw.text(
             (scaled(54, canvas.width), y),
@@ -42,7 +42,7 @@ def footer(
     canvas.text(
         (canvas.width - scaled(54, canvas.width), y),
         f"{label_text} {updated:%H:%M}",
-        size=15,
+        size=17,
         fill=MUTED,
         anchor="ra",
     )
@@ -50,7 +50,7 @@ def footer(
 
 
 def label(canvas: EInkCanvas, x: int, y: int, value: str) -> None:
-    canvas.text((x, y), value.upper(), size=17, fill=MUTED, stroke_width=0)
+    canvas.text((x, y), value.upper(), size=22, fill=MUTED, stroke_width=1)
 
 
 def metric(
@@ -62,5 +62,5 @@ def metric(
     title: str,
     value: str,
 ) -> None:
-    canvas.text((x, y), title, size=16, fill=MUTED)
-    canvas.text((x, y + scaled(28, canvas.width)), value, size=26, fill=INK)
+    canvas.text((x, y), title, size=20, fill=MUTED)
+    canvas.text((x, y + scaled(32, canvas.width)), value, size=32, fill=INK)

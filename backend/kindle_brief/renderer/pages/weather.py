@@ -4,7 +4,7 @@ from kindle_brief.models import DashboardSnapshot
 from kindle_brief.renderer import icons
 from kindle_brief.renderer.formatting import clock, is_night, percentage, temperature
 from kindle_brief.renderer.moon import moon_phase_image
-from kindle_brief.renderer.theme import MUTED, PANEL, SECONDARY, scaled
+from kindle_brief.renderer.theme import INK, MUTED, PANEL, SECONDARY, font, scaled
 
 from .common import footer, label, metric, page_canvas
 
@@ -22,7 +22,7 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
         return canvas
 
     label(canvas, margin, y, snapshot.location_name)
-    hero_icon_size = scaled(220, width)
+    hero_icon_size = scaled(240, width)
     canvas.paste(
         icons.weather_asset(
             weather.condition_code,
@@ -40,21 +40,32 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
         (margin, y + scaled(32, width)),
     )
     canvas.text(
-        (scaled(330, width), y + scaled(16, width)), temperature(weather.temperature_c), size=86
+        (scaled(330, width), y + scaled(8, width)), temperature(weather.temperature_c), size=96
     )
-    canvas.text((scaled(595, width), y + scaled(45, width)), weather.condition_text, size=29)
+    condition, condition_size = canvas.fit_text(
+        weather.condition_text,
+        width - scaled(595, width) - margin,
+        size=36,
+        minimum=30,
+    )
+    canvas.draw.text(
+        (scaled(595, width), y + scaled(42, width)),
+        condition,
+        fill=INK,
+        font=font(condition_size),
+    )
     canvas.text(
-        (scaled(595, width), y + scaled(101, width)),
+        (scaled(595, width), y + scaled(108, width)),
         (
             f"Feels {temperature(weather.feels_like_c)} · "
             f"H {temperature(weather.high_c)} · L {temperature(weather.low_c)}"
         ),
-        size=20,
+        size=26,
         fill=SECONDARY,
     )
 
-    grid_top = y + scaled(255, width)
-    grid_bottom = grid_top + scaled(135, width)
+    grid_top = y + scaled(270, width)
+    grid_bottom = grid_top + scaled(150, width)
     canvas.draw.rounded_rectangle(
         (margin, grid_top, width - margin, grid_bottom),
         radius=scaled(18, width),
@@ -70,7 +81,7 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
         canvas.draw,
         canvas,
         x=columns[0],
-        y=grid_top + scaled(22, width),
+        y=grid_top + scaled(23, width),
         title="Humidity",
         value=percentage(weather.humidity_pct),
     )
@@ -78,7 +89,7 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
         canvas.draw,
         canvas,
         x=columns[1],
-        y=grid_top + scaled(22, width),
+        y=grid_top + scaled(23, width),
         title="Rain",
         value=percentage(weather.rain_probability_pct),
     )
@@ -86,7 +97,7 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
         canvas.draw,
         canvas,
         x=columns[2],
-        y=grid_top + scaled(22, width),
+        y=grid_top + scaled(23, width),
         title="Wind",
         value=f"{round(weather.wind_kph or 0)} km/h",
     )
@@ -94,14 +105,14 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
         canvas.draw,
         canvas,
         x=columns[3],
-        y=grid_top + scaled(22, width),
+        y=grid_top + scaled(23, width),
         title="UV",
         value=f"{weather.uv_index or 0:g}",
     )
 
-    y = grid_bottom + scaled(40, width)
+    y = grid_bottom + scaled(38, width)
     label(canvas, margin, y, "Hourly")
-    hour_top = y + scaled(40, width)
+    hour_top = y + scaled(45, width)
     hourly = weather.hourly[:6]
     cell_width = (width - margin * 2) / max(1, len(hourly))
     for index, item in enumerate(hourly):
@@ -109,11 +120,11 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
         canvas.text(
             (cx, hour_top),
             clock(item.timestamp, snapshot.timezone),
-            size=17,
+            size=21,
             fill=MUTED,
             anchor="ma",
         )
-        hourly_icon_size = scaled(66, width)
+        hourly_icon_size = scaled(76, width)
         canvas.paste(
             icons.weather_asset(
                 item.condition_code,
@@ -126,39 +137,39 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
                 ),
                 cloud_cover_pct=item.cloud_cover_pct,
             ),
-            (round(cx - hourly_icon_size / 2), hour_top + scaled(32, width)),
+            (round(cx - hourly_icon_size / 2), hour_top + scaled(36, width)),
         )
         canvas.text(
-            (cx, hour_top + scaled(105, width)),
+            (cx, hour_top + scaled(116, width)),
             temperature(item.temperature_c),
-            size=22,
+            size=28,
             anchor="ma",
         )
         canvas.text(
-            (cx, hour_top + scaled(140, width)),
+            (cx, hour_top + scaled(158, width)),
             percentage(item.rain_probability_pct),
-            size=15,
+            size=19,
             fill=MUTED,
             anchor="ma",
         )
-    y = hour_top + scaled(190, width)
+    y = hour_top + scaled(210, width)
     canvas.rule(y)
 
     sky_top = y + scaled(34, width)
     label(canvas, margin, sky_top, "Sun & Moon")
-    moon_size = scaled(154, width)
+    moon_size = scaled(170, width)
     if astronomy:
         moon = moon_phase_image(moon_size, astronomy.phase_fraction * 360)
         canvas.paste(moon, (margin, sky_top + scaled(50, width)))
         canvas.text(
-            (margin + scaled(200, width), sky_top + scaled(52, width)),
+            (margin + scaled(215, width), sky_top + scaled(50, width)),
             astronomy.phase_name,
-            size=28,
+            size=34,
         )
         canvas.text(
-            (margin + scaled(200, width), sky_top + scaled(100, width)),
+            (margin + scaled(215, width), sky_top + scaled(105, width)),
             f"Illumination {percentage(astronomy.illumination_pct)}",
-            size=20,
+            size=25,
             fill=SECONDARY,
         )
         horizon_size = scaled(76, width)
@@ -181,35 +192,35 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
             canvas.text(
                 (text_x, horizon_y + scaled(12, width)),
                 title,
-                size=14,
+                size=18,
                 fill=MUTED,
             )
             canvas.text(
                 (text_x, horizon_y + scaled(39, width)),
                 clock(event_time, snapshot.timezone),
-                size=20,
+                size=24,
                 fill=SECONDARY,
             )
         sun_x = scaled(690, width)
-        canvas.text((sun_x, sky_top + scaled(53, width)), "Sunrise", size=17, fill=MUTED)
+        canvas.text((sun_x, sky_top + scaled(53, width)), "Sunrise", size=20, fill=MUTED)
         canvas.text(
             (sun_x, sky_top + scaled(84, width)),
             clock(astronomy.sunrise, snapshot.timezone),
-            size=28,
+            size=32,
         )
-        canvas.text((sun_x, sky_top + scaled(134, width)), "Sunset", size=17, fill=MUTED)
+        canvas.text((sun_x, sky_top + scaled(136, width)), "Sunset", size=20, fill=MUTED)
         canvas.text(
-            (sun_x, sky_top + scaled(165, width)),
+            (sun_x, sky_top + scaled(171, width)),
             clock(astronomy.sunset, snapshot.timezone),
-            size=28,
+            size=32,
         )
-    y = sky_top + scaled(235, width)
+    y = sky_top + scaled(250, width)
     canvas.rule(y)
 
     stars_top = y + scaled(32, width)
     label(canvas, margin, stars_top, "Stargazing")
     rating = astronomy.stargazing_rating if astronomy else "Unavailable"
-    canvas.text((margin, stars_top + scaled(43, width)), rating, size=42)
+    canvas.text((margin, stars_top + scaled(46, width)), rating, size=48)
     if astronomy and astronomy.best_sky_start:
         window = (
             f"Best sky: {clock(astronomy.best_sky_start, snapshot.timezone)}–"
@@ -218,18 +229,18 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
     else:
         window = "No reliable viewing window"
     canvas.text(
-        (margin + scaled(310, width), stars_top + scaled(56, width)),
+        (margin + scaled(310, width), stars_top + scaled(55, width)),
         window,
-        size=22,
+        size=27,
         fill=SECONDARY,
     )
     canvas.text(
-        (margin + scaled(310, width), stars_top + scaled(98, width)),
+        (margin + scaled(310, width), stars_top + scaled(103, width)),
         (
             f"Cloud {percentage(weather.cloud_cover_pct)} · "
             f"Visibility {weather.visibility_km or 0:g} km"
         ),
-        size=18,
+        size=22,
         fill=MUTED,
     )
 

@@ -39,7 +39,24 @@ def clock(value: datetime | None, timezone: str, *, include_day: bool = False) -
     if value is None:
         return "—"
     local = local_datetime(value, timezone)
-    return f"{local:%a %H:%M}" if include_day else f"{local:%H:%M}"
+    if include_day:
+        return f"{local:%a} {local.day} {local:%b} · {local:%H:%M}"
+    return f"{local:%H:%M}"
+
+
+def date_range(values: tuple[datetime, ...], timezone: str) -> str:
+    """Format a compact, unambiguous local date range."""
+    if not values:
+        return "Dates unavailable"
+    start = local_datetime(min(values), timezone)
+    end = local_datetime(max(values), timezone)
+    if start.date() == end.date():
+        return f"{start.day} {start:%b %Y}"
+    if start.year != end.year:
+        return f"{start.day} {start:%b %Y}–{end.day} {end:%b %Y}"
+    if start.month != end.month:
+        return f"{start.day} {start:%b}–{end.day} {end:%b %Y}"
+    return f"{start.day}–{end.day} {end:%b %Y}"
 
 
 def temperature(value: float | None) -> str:

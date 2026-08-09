@@ -38,7 +38,7 @@ class EInkCanvas:
 
     def header(self, text: str, *, stale: bool = False) -> int:
         top = scaled(34, self.width)
-        home_size = scaled(46, self.width)
+        home_size = scaled(52, self.width)
         home_left = scaled(45, self.width)
         icons.home(
             self.draw,
@@ -56,7 +56,7 @@ class EInkCanvas:
                 top + home_size + pad,
             )
         )
-        header_font = font(scaled(27, self.width))
+        header_font = font(scaled(32, self.width))
         center_x = self.width // 2
         baseline_y = top + scaled(3, self.width)
         bbox = self.draw.textbbox(
@@ -166,8 +166,8 @@ class EInkCanvas:
 
     def page_indicator(self, current: int, total: int) -> None:
         y = self.height - scaled(43, self.width)
-        gap = scaled(23, self.width)
-        radius = scaled(4, self.width)
+        gap = scaled(25, self.width)
+        radius = scaled(5, self.width)
         start = self.width / 2 - ((total - 1) * gap) / 2
         for index in range(total):
             x = start + index * gap

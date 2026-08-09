@@ -8,7 +8,7 @@ from PIL import ImageFont
 PAPER = 255
 INK = 18
 SECONDARY = 82
-MUTED = 130
+MUTED = 102
 DIVIDER = 194
 PANEL = 242
 

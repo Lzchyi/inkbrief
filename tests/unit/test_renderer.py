@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from kindle_brief.demo import demo_snapshot
 from kindle_brief.models import DeviceProfile, PageID
 from kindle_brief.renderer import icons
-from kindle_brief.renderer.formatting import header_text, is_night
+from kindle_brief.renderer.formatting import clock, date_range, header_text, is_night
 from kindle_brief.renderer.moon import moon_phase_image
 from kindle_brief.renderer.release import build_release, render_pages, render_previews
 from kindle_brief.renderer.theme import project_root
@@ -147,6 +147,15 @@ def test_night_detection_uses_the_astronomy_daylight_window() -> None:
         sunrise=sunrise,
         sunset=sunset,
     )
+
+
+def test_f1_dates_are_explicit_after_timezone_conversion() -> None:
+    first = datetime(2026, 8, 21, 10, 30, tzinfo=UTC)
+    last = datetime(2026, 8, 23, 13, 0, tzinfo=UTC)
+
+    assert clock(first, "Asia/Kuala_Lumpur") == "18:30"
+    assert clock(first, "Asia/Kuala_Lumpur", include_day=True) == "Fri 21 Aug · 18:30"
+    assert date_range((first, last), "Asia/Kuala_Lumpur") == "21–23 Aug 2026"
 
 
 def test_all_pages_have_exact_profile_dimensions_and_centered_header() -> None:

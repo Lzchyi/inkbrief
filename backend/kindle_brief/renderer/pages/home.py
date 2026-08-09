@@ -19,7 +19,7 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
         y += scaled(290, width)
     else:
         astronomy = snapshot.astronomy
-        icon_size = scaled(250, width)
+        icon_size = scaled(270, width)
         weather_icon = icons.weather_asset(
             weather.condition_code,
             icon_size,
@@ -35,75 +35,75 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
         )
         canvas.paste(
             weather_icon,
-            (margin + scaled(18, width), y + scaled(20, width)),
+            (margin + scaled(8, width), y + scaled(18, width)),
         )
-        details_x = scaled(415, width)
+        details_x = scaled(405, width)
         canvas.text(
-            (details_x, y + scaled(8, width)),
+            (details_x, y),
             temperature(weather.temperature_c),
-            size=96,
+            size=104,
             stroke_width=1,
         )
         condition, condition_size = canvas.fit_text(
             weather.condition_text,
             width - details_x - margin,
-            size=34,
-            minimum=25,
+            size=38,
+            minimum=30,
         )
         canvas.draw.text(
-            (details_x, y + scaled(130, width)),
+            (details_x, y + scaled(139, width)),
             condition,
             fill=INK,
             font=font(condition_size),
         )
         canvas.text(
-            (details_x, y + scaled(185, width)),
+            (details_x, y + scaled(198, width)),
             f"H {temperature(weather.high_c)}   L {temperature(weather.low_c)}",
-            size=24,
+            size=29,
             fill=SECONDARY,
         )
         canvas.text(
-            (details_x, y + scaled(228, width)),
+            (details_x, y + scaled(246, width)),
             (
                 f"Humidity {percentage(weather.humidity_pct)}   ·   "
                 f"Rain {percentage(weather.rain_probability_pct)}"
             ),
-            size=21,
+            size=25,
             fill=SECONDARY,
         )
-        y += scaled(315, width)
+        y += scaled(350, width)
     canvas.rule(y)
 
     astronomy = snapshot.astronomy
-    moon_top = y + scaled(35, width)
+    moon_top = y + scaled(36, width)
     if astronomy is not None:
-        moon_size = scaled(112, width)
+        moon_size = scaled(140, width)
         moon = moon_phase_image(moon_size, astronomy.phase_fraction * 360)
         canvas.paste(moon, (margin + scaled(10, width), moon_top))
         canvas.text(
-            (margin + scaled(158, width), moon_top + scaled(15, width)),
+            (margin + scaled(178, width), moon_top + scaled(18, width)),
             astronomy.phase_name,
-            size=28,
+            size=34,
         )
         canvas.text(
-            (margin + scaled(158, width), moon_top + scaled(63, width)),
+            (margin + scaled(178, width), moon_top + scaled(78, width)),
             f"Stargazing: {astronomy.stargazing_rating}",
-            size=22,
+            size=26,
             fill=SECONDARY,
         )
     else:
         canvas.text((margin, moon_top + scaled(36, width)), "Sky data unavailable", size=26)
-    y = moon_top + scaled(145, width)
+    y = moon_top + scaled(175, width)
     canvas.rule(y)
 
     f1 = snapshot.f1
     f1_top = y + scaled(32, width)
-    f1_label_icon_size = scaled(30, width)
+    f1_label_icon_size = scaled(36, width)
     canvas.paste(
         icons.motorsport_asset("trophy", f1_label_icon_size),
-        (margin, f1_top - scaled(6, width)),
+        (margin, f1_top - scaled(7, width)),
     )
-    label(canvas, margin + scaled(41, width), f1_top, "Formula 1")
+    label(canvas, margin + scaled(48, width), f1_top, "Formula 1")
     if f1 is None:
         canvas.text((margin, f1_top + scaled(42, width)), "Schedule unavailable", size=26)
         y = f1_top + scaled(150, width)
@@ -111,11 +111,11 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
         event, event_size = canvas.fit_text(
             f1.event_name,
             width - margin * 2,
-            size=32,
-            minimum=24,
+            size=38,
+            minimum=31,
         )
         canvas.draw.text(
-            (margin, f1_top + scaled(40, width)),
+            (margin, f1_top + scaled(47, width)),
             event,
             fill=INK,
             font=font(event_size),
@@ -123,16 +123,16 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
         upcoming = next_session(f1.sessions, snapshot.generated_at)
         if upcoming:
             canvas.text(
-                (margin, f1_top + scaled(91, width)),
+                (margin, f1_top + scaled(105, width)),
                 (
                     f"Next: {upcoming.name} · "
                     f"{clock(upcoming.starts_at, snapshot.timezone, include_day=True)} MYT"
                 ),
-                size=21,
+                size=26,
                 fill=SECONDARY,
             )
-        rows_y = f1_top + scaled(140, width)
-        icon_size = scaled(54, width)
+        rows_y = f1_top + scaled(158, width)
+        icon_size = scaled(62, width)
         canvas.paste(
             icons.motorsport_asset("helmet-compact-alt", icon_size),
             (margin, rows_y),
@@ -141,11 +141,11 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
             f"{standing.code} {standing.points:g}" for standing in f1.driver_standings[:3]
         )
         canvas.text(
-            (margin + scaled(70, width), rows_y + scaled(4, width)),
+            (margin + scaled(78, width), rows_y + scaled(6, width)),
             driver_text or "—",
-            size=22,
+            size=26,
         )
-        rows_y += scaled(60, width)
+        rows_y += scaled(68, width)
         canvas.paste(
             icons.motorsport_asset("car-compact-alt", icon_size),
             (margin, rows_y),
@@ -154,32 +154,31 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
             f"{standing.code} {standing.points:g}" for standing in f1.constructor_standings[:3]
         )
         canvas.text(
-            (margin + scaled(70, width), rows_y + scaled(4, width)),
+            (margin + scaled(78, width), rows_y + scaled(6, width)),
             constructor_text or "—",
-            size=22,
+            size=26,
         )
-        y = rows_y + scaled(70, width)
+        y = rows_y + scaled(74, width)
     canvas.rule(y)
 
-    news_top = y + scaled(28, width)
+    news_top = y + scaled(27, width)
     label(canvas, margin, news_top, "Headlines")
-    cursor = news_top + scaled(40, width)
+    cursor = news_top + scaled(49, width)
     for article in snapshot.headlines[:3]:
-        canvas.text((margin, cursor + scaled(1, width)), "•", size=26)
-        lines = canvas.wrapped_lines(
+        canvas.text((margin, cursor), "•", size=31)
+        title, title_size = canvas.fit_text(
             article.title,
             width - margin * 2 - scaled(30, width),
-            size=22,
-            max_lines=2,
+            size=28,
+            minimum=28,
         )
-        canvas.draw_lines(
-            lines,
-            x=margin + scaled(30, width),
-            y=cursor,
-            size=22,
-            line_height=31,
+        canvas.draw.text(
+            (margin + scaled(34, width), cursor),
+            title,
+            fill=INK,
+            font=font(title_size),
         )
-        cursor += scaled(72, width) if len(lines) > 1 else scaled(52, width)
+        cursor += scaled(61, width)
 
     footer(
         canvas,
