@@ -53,8 +53,12 @@ differences=$(printf '%s\n' "$raw_differences" | sed \
     -e '/^\.f\.\.[tT]\.* /d' \
     -e '/\/\.active_content_sandbox\/store.*: not empty, cannot delete$/d' \
     -e '/\/\.active_content_sandbox: not empty, cannot delete$/d' \
-    -e '/^cannot delete non-empty directory: \.active_content_sandbox\(\/store\(\/resource\)\?\)\?$/d' \
-    -e '/^\*deleting \.active_content_sandbox\(\/store\(\/resource\)\?\)\?\/$/d')
+    -e '/^cannot delete non-empty directory: \.active_content_sandbox\/store\/resource$/d' \
+    -e '/^cannot delete non-empty directory: \.active_content_sandbox\/store$/d' \
+    -e '/^cannot delete non-empty directory: \.active_content_sandbox$/d' \
+    -e '/^[*]deleting \.active_content_sandbox\/store\/resource\/$/d' \
+    -e '/^[*]deleting \.active_content_sandbox\/store\/$/d' \
+    -e '/^[*]deleting \.active_content_sandbox\/$/d')
 
 if [ -n "$differences" ]; then
     printf '%s\n' "Backup differs from the mounted Kindle:" >&2
