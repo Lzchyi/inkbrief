@@ -14,13 +14,18 @@ from kindle_brief.serialization import (
 
 def test_dashboard_snapshot_json_round_trip_preserves_nested_models() -> None:
     original = demo_snapshot()
-    stored_story = replace(original.morning_brief[0], sources=("Bernama",))
+    stored_story = replace(
+        original.morning_brief[0],
+        sources=("Bernama",),
+        article_urls=("https://example.com/story",),
+    )
     snapshot = replace(original, degraded=True, morning_brief=(stored_story,))
 
     decoded = dashboard_snapshot_from_json(canonical_json_dumps(snapshot))
 
     assert decoded == snapshot
     assert decoded.degraded is True
+    assert decoded.morning_brief[0].article_urls == ("https://example.com/story",)
 
 
 def test_legacy_cached_brief_without_sources_remains_readable() -> None:
@@ -34,6 +39,7 @@ def test_legacy_cached_brief_without_sources_remains_readable() -> None:
     )
 
     assert story.sources == ()
+    assert story.article_urls == ()
 
 
 def test_dashboard_snapshot_json_rejects_naive_generated_time() -> None:

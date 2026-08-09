@@ -32,6 +32,11 @@ if [ -r "$KB_APP_ROOT/config/base-url" ]; then
 else
     update_status=not-configured
 fi
+if kb_article_browser_enabled; then
+    browser_status=enabled
+else
+    browser_status=disabled
+fi
 page_count=0
 cache_page_root=
 if kb_owned_cache_dir "$KB_APP_ROOT/cache/current"; then
@@ -53,6 +58,7 @@ Running: $running
 FBInk: $fbink_status
 Touch: $touch_status
 Update: $update_status
+Article links: $browser_status
 Pages: $page_count/5"
 printf '%s\n' "$report"
 

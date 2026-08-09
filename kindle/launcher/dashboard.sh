@@ -144,10 +144,52 @@ printf '%s\n' "$controller_pid" > "$KB_CONTROLLER_PID_FILE"
 
 page_index=1
 page_changes=0
+page_path=
+page_id=
+links_path=
+pending_url=
 show_page() {
     refresh_mode=$1
     page_path=$(sed -n "${page_index}p" "$pages_file")
+    page_filename=${page_path##*/}
+    page_id=${page_filename%.png}
+    case "$page_path" in
+        "$KB_APP_ROOT/cache/current/pages/"*)
+            links_path=$KB_APP_ROOT/cache/current/links.tsv
+            ;;
+        "$KB_APP_ROOT/cache/previous/pages/"*)
+            links_path=$KB_APP_ROOT/cache/previous/links.tsv
+            ;;
+        "$KB_APP_ROOT/pages/"*)
+            links_path=$KB_APP_ROOT/links.tsv
+            ;;
+        *)
+            links_path=
+            ;;
+    esac
     /bin/sh "$KB_APP_ROOT/bin/fbink-display.sh" "$page_path" "$refresh_mode"
+}
+lookup_link() {
+    lookup_x=$1
+    lookup_y=$2
+    [ -n "$links_path" ] && [ -f "$links_path" ] && [ ! -L "$links_path" ] || return 1
+    while IFS=' ' read -r link_page link_left link_top link_right link_bottom link_url link_extra || \
+          [ -n "$link_page$link_left$link_top$link_right$link_bottom$link_url$link_extra" ]
+    do
+        [ -z "$link_extra" ] || continue
+        [ "$link_page" = "$page_id" ] || continue
+        kb_nonnegative_integer "$link_left" || continue
+        kb_nonnegative_integer "$link_top" || continue
+        kb_nonnegative_integer "$link_right" || continue
+        kb_nonnegative_integer "$link_bottom" || continue
+        kb_valid_https_url "$link_url" || continue
+        if [ "$lookup_x" -ge "$link_left" ] && [ "$lookup_x" -lt "$link_right" ] && \
+           [ "$lookup_y" -ge "$link_top" ] && [ "$lookup_y" -lt "$link_bottom" ]; then
+            printf '%s\n' "$link_url"
+            return 0
+        fi
+    done < "$links_path"
+    return 1
 }
 advance_refresh_mode() {
     page_changes=$((page_changes + 1))
@@ -176,11 +218,38 @@ while IFS= read -r event; do
         HOME|TIMEOUT)
             break
             ;;
+        TAP:*:*)
+            tap_coordinates=${event#TAP:}
+            tap_x=${tap_coordinates%%:*}
+            tap_y=${tap_coordinates#*:}
+            if kb_nonnegative_integer "$tap_x" && \
+               kb_nonnegative_integer "$tap_y" && \
+               [ "$tap_x" -lt "$screen_width" ] && \
+                [ "$tap_y" -lt "$screen_height" ]; then
+                pending_url=$(lookup_link "$tap_x" "$tap_y" || true)
+                if [ -n "$pending_url" ]; then
+                    if kb_article_browser_enabled; then
+                        break
+                    fi
+                    pending_url=
+                    kb_show_message "Enable Article Links in KUAL first" || true
+                fi
+            fi
+            ;;
         ERROR:*)
             kb_log "$event"
             break
             ;;
     esac
 done < "$fifo"
+
+if [ -n "$pending_url" ]; then
+    # Release EVIOCGRAB and restore the stock UI before Chromium takes focus.
+    cleanup
+    if ! /bin/sh "$KB_APP_ROOT/bin/open-url.sh" "$pending_url"; then
+        kb_show_message "Could not open article in Kindle browser" || true
+        exit 6
+    fi
+fi
 
 exit 0

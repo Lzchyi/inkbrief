@@ -27,7 +27,7 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
     canvas, y = page_canvas(snapshot, width, height)
     margin = scaled(58, width)
     stories = snapshot.morning_brief[:5]
-    label(canvas, margin, y, "Morning brief")
+    label(canvas, margin, y, "Morning brief · tap story to read")
     story_count = f"{len(stories)} stories"
     if len(stories) < len(snapshot.morning_brief):
         story_count = f"{len(stories)} of {len(snapshot.morning_brief)} stories"
@@ -41,6 +41,7 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
     cursor = y + scaled(49, width)
     available_bottom = height - scaled(110, width)
     rendered_sources: list[str] = []
+    articles_by_id = {article.article_id: article for article in snapshot.headlines}
     if not stories:
         canvas.text(
             (width // 2, cursor + scaled(150, width)),
@@ -49,6 +50,7 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
             anchor="ma",
         )
     for index, story in enumerate(stories, start=1):
+        row_top = cursor - scaled(8, width)
         remaining = max(1, len(stories) - index + 1)
         remaining_space = available_bottom - cursor
         block = min(scaled(225, width), remaining_space // remaining)
@@ -107,6 +109,20 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
             )
             rendered_sources.append(source_label)
         cursor += block
+        current_urls = tuple(
+            articles_by_id[article_id].url
+            for article_id in story.article_ids
+            if article_id in articles_by_id
+        )
+        for article_url in (*story.article_urls, *current_urls):
+            if canvas.link_hotspot(
+                article_url,
+                left=margin,
+                top=row_top,
+                right=width - margin,
+                bottom=cursor - scaled(12, width),
+            ):
+                break
         if cursor < available_bottom:
             canvas.draw.line(
                 (text_x, cursor - scaled(12, width), width - margin, cursor - scaled(12, width)),

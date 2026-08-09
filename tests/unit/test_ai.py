@@ -31,6 +31,7 @@ def cluster(article_id: str = "a") -> StoryCluster:
 def test_fallback_is_source_grounded() -> None:
     stories = FallbackProvider().create_brief((cluster(),), max_stories=1)
     assert stories[0].article_ids == ("a",)
+    assert stories[0].article_urls == ("https://example.com/a",)
     assert stories[0].summary.startswith("A verified sentence")
 
 

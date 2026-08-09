@@ -10,6 +10,7 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from PIL import Image
 
@@ -77,6 +78,26 @@ def render_pages(
     return images, metadata
 
 
+def _links_bytes(metadata: dict[str, Any]) -> bytes:
+    pages = metadata.get("pages", {})
+    lines: list[str] = []
+    for page_id, _ in PAGE_RENDERERS:
+        page = pages.get(page_id.value, {})
+        for hotspot in page.get("hotspots", []):
+            url = hotspot.get("url")
+            if not isinstance(url, str):
+                continue
+            # Keep the HTTPS scheme and RFC 3986 delimiters shell-readable;
+            # percent-encode only non-ASCII/unsupported octets. Device code
+            # passes this as one quoted argv and never evaluates it.
+            encoded_url = quote(url, safe=":/?#[]@!$&'()*+,;=%-._~")
+            lines.append(
+                f"{page_id.value} {hotspot['left']} {hotspot['top']} {hotspot['right']} "
+                f"{hotspot['bottom']} {encoded_url}\n"
+            )
+    return "".join(lines).encode("ascii")
+
+
 def render_previews(
     snapshot: DashboardSnapshot,
     profile: DeviceProfile,
@@ -84,6 +105,7 @@ def render_previews(
 ) -> tuple[Path, ...]:
     output = Path(output_directory)
     images, metadata = render_pages(snapshot, profile)
+    links_bytes = _links_bytes(metadata)
     paths: list[Path] = []
     for page_id, content in images.items():
         filename = f"{page_id.value}.png"
@@ -94,6 +116,7 @@ def render_previews(
         output / "hotspots.json",
         (canonical_json_dumps(metadata) + "\n").encode("utf-8"),
     )
+    _atomic_write(output / "links.tsv", links_bytes)
     return tuple(paths)
 
 
@@ -101,6 +124,7 @@ def _manifest(
     snapshot: DashboardSnapshot,
     profile: DeviceProfile,
     images: dict[PageID, bytes],
+    links_bytes: bytes,
 ) -> ReleaseManifest:
     artifacts = tuple(
         PageArtifact(
@@ -118,6 +142,8 @@ def _manifest(
         "profile": to_jsonable(profile),
         "snapshot": to_jsonable(snapshot),
         "pages": [to_jsonable(artifact) for artifact in artifacts],
+        "links_sha256": hashlib.sha256(links_bytes).hexdigest(),
+        "links_bytes": len(links_bytes),
     }
     release_id = hashlib.sha256(canonical_json_dumps(identity).encode("utf-8")).hexdigest()
     return ReleaseManifest(
@@ -159,7 +185,8 @@ def build_release(
         raise ValueError("release profiles must declare model_code")
     public = Path(public_root)
     images, metadata = render_pages(snapshot, profile)
-    manifest = _manifest(snapshot, profile, images)
+    links_bytes = _links_bytes(metadata)
+    manifest = _manifest(snapshot, profile, images, links_bytes)
     release_relative = Path("profiles") / profile.profile_id / "releases" / manifest.release_id
     release_directory = public / release_relative
 
@@ -180,6 +207,7 @@ def build_release(
         "SHA256SUMS": sha256sums_bytes,
         "snapshot.json": snapshot_bytes,
         "hotspots.json": metadata_bytes,
+        "links.tsv": links_bytes,
         **{f"pages/{page_id.value}.png": content for page_id, content in images.items()},
     }
     bundle = _deterministic_tar_gz(bundle_files)
@@ -199,6 +227,8 @@ def build_release(
         "manifest": f"releases/{manifest.release_id}/manifest.json",
         "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
         "sha256sums_sha256": hashlib.sha256(sha256sums_bytes).hexdigest(),
+        "links_sha256": hashlib.sha256(links_bytes).hexdigest(),
+        "links_bytes": len(links_bytes),
         "bundle": f"releases/{manifest.release_id}/dashboard.tar.gz",
         "bundle_sha256": bundle_hash,
         "bundle_bytes": len(bundle),

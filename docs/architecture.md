@@ -7,7 +7,7 @@ launch-time and manual updater.
 ```text
 Open-Meteo ─┐
 Jolpica F1 ─┼─> Python data pipeline ─> immutable snapshot ─> five PNG pages
-RSS feeds ──┤             │                       │                 │
+RSS feeds ──┤             │                       ├─ HTTPS link map │
 local sky ──┘             └─ last-success cache  └─ manifest       │
 optional AI ────────────────────────────────────────────────────────┘
                                                                     │
@@ -62,7 +62,10 @@ environment. Starting the dashboard:
    touch input only while the dashboard is active.
 5. Draws one page at a time: flashing GC16 on launch and every fifth page
    change, with non-flashing GL16 grayscale updates in between.
-6. Releases input and asks the stock Home UI to return on every normal or
+6. On a verified news-row tap, releases input and launches the exact HTTPS URL
+   in the stock Chromium browser, provided the user has explicitly enabled the
+   risk-labeled KUAL option.
+7. Releases input and asks the stock Home UI to return on every normal or
    trapped exit.
 
 The stock framework is never stopped. There is no boot hook, cron job,

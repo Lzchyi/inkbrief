@@ -268,11 +268,15 @@ def test_real_packager_output_installs_on_fake_mount(
     assert (package / "payload" / "app" / "config" / "base-url").read_text(
         encoding="ascii"
     ) == "https://updates.example.test/kindle-brief\n"
+    assert (package / "payload" / "app" / "bin" / "open-url.sh").stat().st_mode & 0o111
+    assert (package / "payload" / "app" / "links.tsv").is_file()
+    assert (package / "payload" / "kual" / "enable-article-links.sh").stat().st_mode & 0o111
 
     mount = _make_fake_mount(tmp_path, "Packaged Kindle")
     installed = _install(mount, package)
     assert installed.returncode == 0, installed.stderr
     assert (mount / "kindle-brief" / "current" / "pages" / "home.png").is_file()
+    assert (mount / "kindle-brief" / "current" / "links.tsv").is_file()
     assert (mount / "kindle-brief" / "current" / "config" / "base-url").read_text(
         encoding="ascii"
     ) == "https://updates.example.test/kindle-brief\n"
@@ -406,6 +410,7 @@ def test_host_release_is_directly_consumable_by_posix_updater(tmp_path: Path) ->
     assert current["profile_id"] == "kt5"
     assert current["model_code"] == "KT5"
     assert current["release_id"] == manifest.release_id
+    assert current["links_bytes"] > 0
 
     release_root = profile_root / "releases" / manifest.release_id
     manifest_path = release_root / "manifest.json"
@@ -502,6 +507,7 @@ exec /usr/bin/sha256sum \"$@\"
     cache = app_root / "cache" / "current"
     assert (cache / "RELEASE_ID").read_text(encoding="ascii").strip() == manifest.release_id
     assert not (cache / "dashboard.tar.gz").exists()
+    assert (cache / "links.tsv").read_bytes() == (release_root / "links.tsv").read_bytes()
     for relative_path in expected_paths:
         assert (cache / relative_path).read_bytes() == (release_root / relative_path).read_bytes()
 
@@ -608,7 +614,7 @@ def test_launch_update_shares_deadline_while_manual_keeps_long_timeout(
 
     assert installed.returncode == 0, installed.stderr
     manual_calls = [line.split("\t") for line in curl_log.read_text().splitlines()]
-    assert len(manual_calls) == 8
+    assert len(manual_calls) == 9
     assert all(call[1:] == ["15", "90"] for call in manual_calls)
 
     curl_log.unlink()
@@ -879,6 +885,96 @@ def test_dashboard_uses_bounded_periodic_full_refreshes(
         assert modes == expected_modes
 
 
+def test_dashboard_tap_restores_ui_then_opens_exact_article_url(tmp_path: Path) -> None:
+    app_root = tmp_path / "runtime-app"
+    bin_dir = app_root / "bin"
+    pages_dir = app_root / "pages"
+    config_dir = app_root / "config"
+    bin_dir.mkdir(parents=True)
+    pages_dir.mkdir()
+    config_dir.mkdir()
+    for script in ("common.sh", "dashboard.sh"):
+        shutil.copy2(REPO_ROOT / "kindle" / "launcher" / script, bin_dir / script)
+    for page_id in ("home", "weather", "f1", "morning-brief", "headlines"):
+        (pages_dir / f"{page_id}.png").write_bytes(b"page")
+    article_url = "https://example.test/story?a=1&b=2"
+    (app_root / "links.tsv").write_text(
+        f"home 200 200 900 300 {article_url}\n",
+        encoding="ascii",
+    )
+    (config_dir / "article-browser-enabled").write_text(
+        "kindle-brief-internal-browser-risk-accepted-v1\n",
+        encoding="ascii",
+    )
+    sequence_log = tmp_path / "sequence.log"
+    scripts = {
+        "touch-controller": (
+            "#!/bin/sh\nprintf '%s\\n' 'TAP:300:250'\n"
+            "trap 'exit 0' TERM\nwhile :; do sleep 1; done\n"
+        ),
+        "fbink-display.sh": "#!/bin/sh\nexit 0\n",
+        "failsafe.sh": "#!/bin/sh\nexit 0\n",
+        "restore-ui.sh": "#!/bin/sh\nprintf '%s\\n' restore >> \"$SEQUENCE_LOG\"\n",
+        "open-url.sh": (
+            "#!/bin/sh\n"
+            '[ ! -e "$KINDLE_BRIEF_STATE_DIR/touch-controller.pid" ] || exit 9\n'
+            'printf \'open|%s\\n\' "$1" >> "$SEQUENCE_LOG"\n'
+        ),
+    }
+    for name, content in scripts.items():
+        path = bin_dir / name
+        path.write_text(content, encoding="ascii")
+        path.chmod(0o755)
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "KINDLE_BRIEF_ROOT": str(app_root),
+            "KINDLE_BRIEF_STATE_DIR": str(tmp_path / "runtime-state"),
+            "SEQUENCE_LOG": str(sequence_log),
+        }
+    )
+
+    dashboard = subprocess.run(
+        ["/bin/sh", str(bin_dir / "dashboard.sh")],
+        capture_output=True,
+        text=True,
+        env=environment,
+        timeout=10,
+    )
+
+    assert dashboard.returncode == 0, dashboard.stderr
+    assert sequence_log.read_text(encoding="utf-8").splitlines() == [
+        "restore",
+        f"open|{article_url}",
+    ]
+
+
+def test_open_url_refuses_browser_without_explicit_risk_marker(tmp_path: Path) -> None:
+    app_root = tmp_path / "runtime-app"
+    bin_dir = app_root / "bin"
+    bin_dir.mkdir(parents=True)
+    for script in ("common.sh", "open-url.sh"):
+        shutil.copy2(REPO_ROOT / "kindle" / "launcher" / script, bin_dir / script)
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "KINDLE_BRIEF_ROOT": str(app_root),
+            "KINDLE_BRIEF_STATE_DIR": str(tmp_path / "runtime-state"),
+        }
+    )
+
+    refused = subprocess.run(
+        ["/bin/sh", str(bin_dir / "open-url.sh"), "https://example.test/story"],
+        capture_output=True,
+        text=True,
+        env=environment,
+        timeout=5,
+    )
+
+    assert refused.returncode == 7
+    assert "risk has not been accepted" in refused.stderr
+
+
 def test_fbink_display_selects_grayscale_and_cleanup_waveforms(tmp_path: Path) -> None:
     app_root = tmp_path / "display-app"
     bin_dir = app_root / "bin"
@@ -1098,6 +1194,44 @@ def test_update_rejects_self_consistent_non_grayscale_png(tmp_path: Path) -> Non
 
     assert rejected.returncode != 0
     assert "Page PNG dimensions or type are unsupported" in rejected.stderr
+    assert not (app_root / "cache" / "current").exists()
+
+
+@pytest.mark.parametrize(
+    "unsafe_url",
+    (
+        "http://example.test/not-allowed",
+        "https://:443/missing-host",
+        "https://example.test:0/invalid-port",
+    ),
+)
+def test_update_rejects_unsafe_link_map_even_when_pointer_matches(
+    tmp_path: Path,
+    unsafe_url: str,
+) -> None:
+    public = tmp_path / "public"
+    profile = DeviceProfile("kt5", "Kindle", 1072, 1448, model_code="KT5")
+    release = build_release(demo_snapshot(), profile, public)
+    profile_root = public / "profiles" / "kt5"
+    current_path = profile_root / "current.json"
+    current = json.loads(current_path.read_text(encoding="utf-8"))
+    links_path = profile_root / "releases" / release.release_id / "links.tsv"
+    links_path.write_text(
+        f"home 200 200 900 300 {unsafe_url}\n",
+        encoding="ascii",
+    )
+    current["links_sha256"] = _sha256(links_path)
+    current["links_bytes"] = links_path.stat().st_size
+    current_path.write_text(
+        json.dumps(current, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    app_root, environment, _ = _make_update_harness(tmp_path, public)
+
+    rejected = _run_update(app_root, environment)
+
+    assert rejected.returncode != 0
+    assert "Link map is invalid" in rejected.stderr
     assert not (app_root / "cache" / "current").exists()
 
 

@@ -13,6 +13,7 @@ from .serialization import require_aware_utc
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+_MAX_URL_CHARS = 4_096
 
 
 class PageID(StrEnum):
@@ -42,6 +43,33 @@ def _percentage(name: str, value: float) -> None:
 def _set_utc(instance: object, field_name: str, value: datetime | None) -> None:
     if value is not None:
         object.__setattr__(instance, field_name, require_aware_utc(value, field_name=field_name))
+
+
+def _safe_https_url(value: object) -> bool:
+    if (
+        not isinstance(value, str)
+        or not value
+        or value != value.strip()
+        or len(value) > _MAX_URL_CHARS
+        or any(
+            character.isspace() or ord(character) < 32 or ord(character) == 127
+            for character in value
+        )
+    ):
+        return False
+    try:
+        parsed = urlsplit(value)
+        hostname = parsed.hostname
+        port = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme == "https"
+        and hostname is not None
+        and parsed.username is None
+        and parsed.password is None
+        and port != 0
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -297,6 +325,7 @@ class BriefStory:
     why_it_matters: str
     article_ids: tuple[str, ...]
     sources: tuple[str, ...] = ()
+    article_urls: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for name in ("headline", "summary", "why_it_matters"):
@@ -308,6 +337,12 @@ class BriefStory:
         if any(not isinstance(item, str) or not item.strip() for item in sources):
             raise ValueError("sources must contain only non-empty names")
         object.__setattr__(self, "sources", tuple(dict.fromkeys(sources)))
+        article_urls = tuple(self.article_urls)
+        object.__setattr__(
+            self,
+            "article_urls",
+            tuple(dict.fromkeys(url for url in article_urls if _safe_https_url(url))),
+        )
 
 
 @dataclass(frozen=True, slots=True)

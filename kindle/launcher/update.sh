@@ -186,6 +186,31 @@ bounded_regular_file() {
     [ "$bounded_size" -le "$bounded_limit" ]
 }
 
+valid_links_file() {
+    links_file=$1
+    bounded_regular_file "$links_file" 65536 || return 1
+    link_total=0
+    while IFS=' ' read -r link_page link_left link_top link_right link_bottom link_url link_extra || \
+          [ -n "$link_page$link_left$link_top$link_right$link_bottom$link_url$link_extra" ]
+    do
+        [ -z "$link_extra" ] || return 1
+        case "$link_page" in
+            home|weather|f1|morning-brief|headlines) ;;
+            *) return 1 ;;
+        esac
+        kb_nonnegative_integer "$link_left" || return 1
+        kb_nonnegative_integer "$link_top" || return 1
+        kb_nonnegative_integer "$link_right" || return 1
+        kb_nonnegative_integer "$link_bottom" || return 1
+        [ "$link_left" -lt "$link_right" ] && [ "$link_right" -le 1072 ] || return 1
+        [ "$link_top" -lt "$link_bottom" ] && [ "$link_bottom" -le 1448 ] || return 1
+        kb_valid_https_url "$link_url" || return 1
+        link_total=$((link_total + 1))
+        [ "$link_total" -le 32 ] || return 1
+    done < "$links_file"
+    return 0
+}
+
 cache_matches_pointer() {
     cached_release=$1
     bounded_regular_file "$cached_release/manifest.json" 1048576 || return 1
@@ -194,6 +219,11 @@ cache_matches_pointer() {
     [ "$cached_manifest_sha" = "$manifest_sha" ] || return 1
     cached_sums_sha=$(sha256_file "$cached_release/SHA256SUMS") || return 1
     [ "$cached_sums_sha" = "$sums_sha" ] || return 1
+    valid_links_file "$cached_release/links.tsv" || return 1
+    cached_links_size=$(wc -c < "$cached_release/links.tsv" | tr -d ' ')
+    [ "$cached_links_size" = "$links_bytes" ] || return 1
+    cached_links_sha=$(sha256_file "$cached_release/links.tsv") || return 1
+    [ "$cached_links_sha" = "$links_sha" ] || return 1
 
     cached_seen_pages=' '
     cached_page_total=0
@@ -308,6 +338,8 @@ model_code=$(json_string model_code "$stage/current.json")
 release_id=$(json_string release_id "$stage/current.json")
 manifest_sha=$(json_string manifest_sha256 "$stage/current.json")
 sums_sha=$(json_string sha256sums_sha256 "$stage/current.json")
+links_sha=$(json_string links_sha256 "$stage/current.json")
+links_bytes=$(json_integer links_bytes "$stage/current.json")
 [ "$(literal_count '"schema_version"' "$stage/current.json")" -eq 1 ] && \
     [ "$current_schema" = 1 ] || finish "Unsupported update pointer schema" 5
 [ "$profile_id" = "kt5" ] || finish "Update profile is not kt5" 5
@@ -315,6 +347,14 @@ sums_sha=$(json_string sha256sums_sha256 "$stage/current.json")
 valid_sha256 "$release_id" || finish "Invalid release identifier" 5
 valid_sha256 "$manifest_sha" || finish "Missing manifest checksum" 5
 valid_sha256 "$sums_sha" || finish "Missing page-checksum digest" 5
+[ "$(literal_count '"links_sha256"' "$stage/current.json")" -eq 1 ] && \
+    valid_sha256 "$links_sha" || finish "Missing link-map checksum" 5
+[ "$(literal_count '"links_bytes"' "$stage/current.json")" -eq 1 ] || \
+    finish "Missing link-map size" 5
+case "$links_bytes" in
+    ''|*[!0-9]*) finish "Invalid link-map size" 5 ;;
+esac
+[ "$links_bytes" -le 65536 ] || finish "Link map is too large" 5
 
 installed_release_id=
 if kb_owned_cache_dir "$cache_root/current" && \
@@ -333,6 +373,8 @@ download "$release_url/manifest.json" "$stage/manifest.json" 1048576 || \
     finish "Could not download bounded release manifest" 4
 download "$release_url/SHA256SUMS" "$stage/SHA256SUMS" 65536 || \
     finish "Could not download bounded page checksums" 4
+download "$release_url/links.tsv" "$stage/links.tsv" 65536 || \
+    finish "Could not download bounded link map" 4
 
 actual_manifest_sha=$(sha256_file "$stage/manifest.json") || \
     finish "No SHA-256 implementation found" 3
@@ -340,6 +382,12 @@ actual_manifest_sha=$(sha256_file "$stage/manifest.json") || \
 actual_sums_sha=$(sha256_file "$stage/SHA256SUMS") || \
     finish "No SHA-256 implementation found" 3
 [ "$actual_sums_sha" = "$sums_sha" ] || finish "Page-checksum digest mismatch" 5
+actual_links_sha=$(sha256_file "$stage/links.tsv") || \
+    finish "No SHA-256 implementation found" 3
+[ "$actual_links_sha" = "$links_sha" ] || finish "Link-map checksum mismatch" 5
+actual_links_bytes=$(wc -c < "$stage/links.tsv" | tr -d ' ')
+[ "$actual_links_bytes" = "$links_bytes" ] || finish "Link-map size mismatch" 5
+valid_links_file "$stage/links.tsv" || finish "Link map is invalid" 5
 
 manifest_profile=$(json_string profile_id "$stage/manifest.json")
 manifest_model=$(json_string model_code "$stage/manifest.json")

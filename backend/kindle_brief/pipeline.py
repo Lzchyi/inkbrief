@@ -434,17 +434,24 @@ def _ground_brief_sources(
     stories: tuple[BriefStory, ...],
     clusters: tuple[StoryCluster, ...],
 ) -> tuple[BriefStory, ...]:
-    source_by_id = {
-        article.article_id: article.source for cluster in clusters for article in cluster.articles
+    article_by_id = {
+        article.article_id: article for cluster in clusters for article in cluster.articles
     }
     return tuple(
         replace(
             story,
             sources=tuple(
                 dict.fromkeys(
-                    source_by_id[article_id]
+                    article_by_id[article_id].source
                     for article_id in story.article_ids
-                    if article_id in source_by_id
+                    if article_id in article_by_id
+                )
+            ),
+            article_urls=tuple(
+                dict.fromkeys(
+                    article_by_id[article_id].url
+                    for article_id in story.article_ids
+                    if article_id in article_by_id
                 )
             ),
         )

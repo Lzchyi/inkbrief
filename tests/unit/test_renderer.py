@@ -6,10 +6,12 @@ import json
 import tarfile
 from dataclasses import replace
 from datetime import UTC, datetime
+from urllib.parse import unquote
 
 from kindle_brief.demo import demo_snapshot
 from kindle_brief.models import DeviceProfile, PageID
 from kindle_brief.renderer import icons
+from kindle_brief.renderer.canvas import EInkCanvas
 from kindle_brief.renderer.formatting import clock, date_range, header_text, is_night
 from kindle_brief.renderer.moon import moon_phase_image
 from kindle_brief.renderer.release import build_release, render_pages, render_previews
@@ -178,15 +180,65 @@ def test_all_pages_have_exact_profile_dimensions_and_centered_header() -> None:
     assert brief_layout["morning_brief_sources"][0] == "Source · Bernama"
 
 
+def test_news_rows_have_https_only_link_hotspots() -> None:
+    original = demo_snapshot()
+    invalid_article = replace(original.headlines[0], url="http://example.invalid/not-secure")
+    snapshot = replace(original, headlines=(invalid_article, *original.headlines[1:]))
+
+    _, metadata = render_pages(snapshot, profile())
+
+    home_links = [
+        item for item in metadata["pages"][PageID.HOME.value]["hotspots"] if "url" in item
+    ]
+    brief_links = [
+        item for item in metadata["pages"][PageID.MORNING_BRIEF.value]["hotspots"] if "url" in item
+    ]
+    headline_links = [
+        item for item in metadata["pages"][PageID.HEADLINES.value]["hotspots"] if "url" in item
+    ]
+    assert len(home_links) == 2
+    assert len(brief_links) == 4
+    assert len(headline_links) == 8
+    assert all(item["url"].startswith("https://") for item in (*home_links, *brief_links))
+    assert all(item["right"] > item["left"] for item in headline_links)
+    assert all(item["bottom"] > item["top"] for item in headline_links)
+    for links in (home_links, brief_links, headline_links):
+        assert all(
+            previous["bottom"] <= following["top"]
+            for previous, following in zip(links, links[1:], strict=False)
+        )
+
+
+def test_link_hotspots_reject_device_incompatible_hosts() -> None:
+    canvas = EInkCanvas(1072, 1448)
+
+    for url in (
+        "https://例え.example/story",
+        "https://[2001:db8::1]/story",
+        "https://example.com:0/story",
+    ):
+        assert not canvas.link_hotspot(url, left=0, top=0, right=100, bottom=100)
+
+    assert canvas.hotspots == []
+
+
 def test_morning_brief_uses_stored_sources_after_headlines_rotate() -> None:
     original = demo_snapshot()
-    stored_story = replace(original.morning_brief[0], sources=("Archived Publisher",))
+    stored_story = replace(
+        original.morning_brief[0],
+        sources=("Archived Publisher",),
+        article_urls=("https://archive.example/story",),
+    )
     snapshot = replace(original, headlines=(), morning_brief=(stored_story,))
 
     _, metadata = render_pages(snapshot, profile())
 
     brief_layout = metadata["pages"][PageID.MORNING_BRIEF.value]["layout"]
     assert brief_layout["morning_brief_sources"] == ["Source · Archived Publisher"]
+    links = [
+        item for item in metadata["pages"][PageID.MORNING_BRIEF.value]["hotspots"] if "url" in item
+    ]
+    assert [item["url"] for item in links] == ["https://archive.example/story"]
 
 
 def test_previews_use_required_filenames(tmp_path) -> None:
@@ -199,6 +251,15 @@ def test_previews_use_required_filenames(tmp_path) -> None:
         "headlines.png",
     }
     assert (tmp_path / "hotspots.json").is_file()
+    links_path = tmp_path / "links.tsv"
+    links = links_path.read_text(encoding="ascii").splitlines()
+    assert links
+    assert not any(line.startswith("weather ") or line.startswith("f1 ") for line in links)
+    page_id, left, top, right, bottom, encoded_url = links[0].split(" ")
+    assert page_id == "home"
+    assert all(value.isdecimal() for value in (left, top, right, bottom))
+    assert encoded_url.startswith("https://")
+    assert unquote(encoded_url) == "https://example.invalid/story-0"
 
 
 def test_release_bundle_is_content_addressed_and_verified(tmp_path) -> None:
@@ -217,6 +278,9 @@ def test_release_bundle_is_content_addressed_and_verified(tmp_path) -> None:
     assert manifest_payload["profile_id"] == "kt5"
     assert manifest_payload["model_code"] == "KT5"
     assert len(sums_path.read_text(encoding="utf-8").splitlines()) == 5
+    links_path = release_directory / "links.tsv"
+    assert hashlib.sha256(links_path.read_bytes()).hexdigest() == current["links_sha256"]
+    assert links_path.stat().st_size == current["links_bytes"]
     bundle_path = current_path.parent / current["bundle"]
     assert hashlib.sha256(bundle_path.read_bytes()).hexdigest() == current["bundle_sha256"]
     with tarfile.open(bundle_path, "r:gz") as archive:
@@ -225,6 +289,7 @@ def test_release_bundle_is_content_addressed_and_verified(tmp_path) -> None:
             "hotspots.json",
             "manifest.json",
             "snapshot.json",
+            "links.tsv",
             "pages/home.png",
             "pages/weather.png",
             "pages/f1.png",

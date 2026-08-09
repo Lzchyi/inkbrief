@@ -43,7 +43,7 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
     groups = [(category, chosen[category]) for category, _ in candidates if category in chosen]
     item_count = sum(len(items) for _, items in groups)
 
-    label(canvas, margin, y, "Latest headlines")
+    label(canvas, margin, y, "Latest headlines · tap to read")
     canvas.text(
         (width - margin, y),
         f"{item_count} items",
@@ -75,6 +75,7 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
             if cursor + scaled(76, width) > bottom:
                 break
             display_index += 1
+            row_top = cursor - scaled(7, width)
             canvas.text(
                 (margin, cursor + scaled(2, width)), f"{display_index:02}", size=20, fill=MUTED
             )
@@ -93,6 +94,13 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
                 fill=SECONDARY,
             )
             cursor += scaled(78, width)
+            canvas.link_hotspot(
+                article.url,
+                left=margin,
+                top=row_top,
+                right=width - margin,
+                bottom=cursor - scaled(7, width),
+            )
         canvas.draw.line(
             (margin, cursor - scaled(8, width), width - margin, cursor - scaled(8, width)),
             fill=DIVIDER,

@@ -23,7 +23,9 @@ a KUAL stop action all return to the stock interface.
 - Weather, astronomy, moon phase, and Chinese lunar date
 - Formula 1 weekend and standings
 - Morning brief with deterministic or optional AI-assisted summaries
-- Categorized headlines
+- Categorized headlines; tap a rendered news row to open its original HTTPS
+  article in the Kindle browser after explicitly enabling the browser-risk
+  option in KUAL
 
 ```mermaid
 flowchart LR
@@ -34,6 +36,7 @@ flowchart LR
     Actions --> Pipeline["Normalize, filter, rank, and render"]
     Pipeline --> Host["Static HTTPS hosting"]
     Host -->|"launch-time or manual checksummed update"| Kindle["Kindle Brief"]
+    Kindle -->|"tap news row"| Browser["Kindle browser article"]
     Kindle <-->|"HOME and failsafe return"| Library["Stock Library and reader"]
 ```
 

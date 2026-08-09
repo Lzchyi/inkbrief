@@ -162,9 +162,10 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
     canvas.rule(y)
 
     news_top = y + scaled(27, width)
-    label(canvas, margin, news_top, "Headlines")
+    label(canvas, margin, news_top, "Headlines · tap to read")
     cursor = news_top + scaled(49, width)
     for article in snapshot.headlines[:3]:
+        row_top = cursor - scaled(8, width)
         canvas.text((margin, cursor), "•", size=31)
         title, title_size = canvas.fit_text(
             article.title,
@@ -179,6 +180,13 @@ def render(snapshot: DashboardSnapshot, width: int, height: int):  # type: ignor
             font=font(title_size),
         )
         cursor += scaled(61, width)
+        canvas.link_hotspot(
+            article.url,
+            left=margin,
+            top=row_top,
+            right=width - margin,
+            bottom=cursor - scaled(8, width),
+        )
 
     footer(
         canvas,

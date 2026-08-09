@@ -196,14 +196,21 @@ printf '%s\n' "$firmware" > "$app_stage/FIRMWARE"
 chmod 0755 "$app_stage/bin/"*.sh "$app_stage/bin/touch-controller" \
     "$extension_stage/"*.sh 2>/dev/null || true
 
-# Preserve only the project-owned endpoint choice. Cached pages and all user
-# book/calibre paths are deliberately outside this transaction.
+# Preserve only the project-owned endpoint and explicit browser-risk choice.
+# Cached pages and all user book/calibre paths are outside this transaction.
 if [ -f "$app_base/current/config/base-url" ] && \
    [ ! -L "$app_base/current/config/base-url" ]; then
     endpoint_size=$(wc -c < "$app_base/current/config/base-url" | tr -d ' ')
     if [ "$endpoint_size" -le 4096 ]; then
         cp "$app_base/current/config/base-url" "$app_stage/config/base-url"
     fi
+fi
+if [ -f "$app_base/current/config/article-browser-enabled" ] && \
+   [ ! -L "$app_base/current/config/article-browser-enabled" ] && \
+   [ "$(sed -n '1p' "$app_base/current/config/article-browser-enabled")" = \
+       kindle-brief-internal-browser-risk-accepted-v1 ]; then
+    cp "$app_base/current/config/article-browser-enabled" \
+        "$app_stage/config/article-browser-enabled"
 fi
 
 # macOS may materialize extended attributes as AppleDouble files on the

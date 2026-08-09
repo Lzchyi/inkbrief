@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 from PIL import Image, ImageDraw
 
@@ -16,15 +17,19 @@ class Hotspot:
     top: int
     right: int
     bottom: int
+    url: str | None = None
 
     def as_dict(self) -> dict[str, int | str]:
-        return {
+        payload: dict[str, int | str] = {
             "name": self.name,
             "left": self.left,
             "top": self.top,
             "right": self.right,
             "bottom": self.bottom,
         }
+        if self.url is not None:
+            payload["url"] = self.url
+        return payload
 
 
 class EInkCanvas:
@@ -35,6 +40,29 @@ class EInkCanvas:
         self.draw = ImageDraw.Draw(self.image)
         self.hotspots: list[Hotspot] = []
         self.layout: dict[str, object] = {}
+
+    def link_hotspot(
+        self,
+        url: str,
+        *,
+        left: int,
+        top: int,
+        right: int,
+        bottom: int,
+    ) -> bool:
+        if not _valid_https_url(url):
+            return False
+        self.hotspots.append(
+            Hotspot(
+                f"link-{sum(item.url is not None for item in self.hotspots) + 1}",
+                max(0, left),
+                max(0, top),
+                min(self.width, right),
+                min(self.height, bottom),
+                url,
+            )
+        )
+        return True
 
     def header(self, text: str, *, stale: bool = False) -> int:
         top = scaled(34, self.width)
@@ -207,3 +235,33 @@ class EInkCanvas:
             self.text((x, y), line, size=size, fill=fill)
             y += scaled(line_height, self.width)
         return y
+
+
+def _valid_https_url(value: str) -> bool:
+    if not isinstance(value, str) or not value or value != value.strip() or len(value) > 4096:
+        return False
+    if any(
+        character.isspace() or ord(character) < 32 or ord(character) == 127 for character in value
+    ):
+        return False
+    try:
+        parsed = urlsplit(value)
+        hostname = parsed.hostname
+        port = parsed.port
+    except ValueError:
+        return False
+    if hostname is None or len(hostname) > 253:
+        return False
+    if (
+        any(character not in "abcdefghijklmnopqrstuvwxyz0123456789-." for character in hostname)
+        or hostname.startswith((".", "-"))
+        or hostname.endswith((".", "-"))
+        or ".." in hostname
+    ):
+        return False
+    return (
+        parsed.scheme == "https"
+        and parsed.username is None
+        and parsed.password is None
+        and port != 0
+    )

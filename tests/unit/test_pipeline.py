@@ -188,11 +188,14 @@ def test_cached_daily_brief_retains_sources_when_hourly_headlines_rotate(tmp_pat
     )
 
     assert first.snapshot.morning_brief[0].sources == ("Bernama",)
+    assert first.snapshot.morning_brief[0].article_urls == (first_article.url,)
     assert second.snapshot.headlines == (next_article,)
     assert second.snapshot.morning_brief[0].article_ids == ("first-story",)
     assert second.snapshot.morning_brief[0].sources == ("Bernama",)
+    assert second.snapshot.morning_brief[0].article_urls == (first_article.url,)
     assert third.snapshot.headlines == ()
     assert third.snapshot.morning_brief[0].sources == ("Bernama",)
+    assert third.snapshot.morning_brief[0].article_urls == (first_article.url,)
     assert provider.calls == 1
 
 

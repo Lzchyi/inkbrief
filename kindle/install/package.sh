@@ -69,6 +69,8 @@ cp "$KINDLE_DIR/launcher/start.sh" "$stage/payload/app/bin/start.sh"
 cp "$KINDLE_DIR/launcher/stop.sh" "$stage/payload/app/bin/stop.sh"
 cp "$KINDLE_DIR/launcher/dashboard.sh" "$stage/payload/app/bin/dashboard.sh"
 cp "$KINDLE_DIR/launcher/failsafe.sh" "$stage/payload/app/bin/failsafe.sh"
+cp "$KINDLE_DIR/launcher/browser-access.sh" "$stage/payload/app/bin/browser-access.sh"
+cp "$KINDLE_DIR/launcher/open-url.sh" "$stage/payload/app/bin/open-url.sh"
 cp "$KINDLE_DIR/launcher/restore-ui.sh" "$stage/payload/app/bin/restore-ui.sh"
 cp "$KINDLE_DIR/launcher/update.sh" "$stage/payload/app/bin/update.sh"
 cp "$KINDLE_DIR/launcher/diagnostics.sh" "$stage/payload/app/bin/diagnostics.sh"
@@ -87,6 +89,10 @@ cp "$KINDLE_DIR/launcher/Dashboard/start.sh" "$stage/payload/kual/start.sh"
 cp "$KINDLE_DIR/launcher/Dashboard/stop.sh" "$stage/payload/kual/stop.sh"
 cp "$KINDLE_DIR/launcher/Dashboard/update.sh" "$stage/payload/kual/update.sh"
 cp "$KINDLE_DIR/launcher/Dashboard/diagnostics.sh" "$stage/payload/kual/diagnostics.sh"
+cp "$KINDLE_DIR/launcher/Dashboard/enable-article-links.sh" \
+    "$stage/payload/kual/enable-article-links.sh"
+cp "$KINDLE_DIR/launcher/Dashboard/disable-article-links.sh" \
+    "$stage/payload/kual/disable-article-links.sh"
 
 touch_binary=${KINDLE_BRIEF_TOUCH_BINARY:-$KINDLE_DIR/navigation/touch-controller-armhf}
 [ -r "$touch_binary" ] || kb_host_die \
@@ -127,6 +133,9 @@ for page_id in home weather f1 morning-brief headlines; do
         kb_host_die "missing rendered page: $pages_dir/$page_id.png"
     cp "$pages_dir/$page_id.png" "$stage/payload/app/pages/$page_id.png"
 done
+links_file=${KINDLE_BRIEF_LINKS_FILE:-$pages_dir/links.tsv}
+[ -r "$links_file" ] || kb_host_die "missing rendered link map: $links_file"
+cp "$links_file" "$stage/payload/app/links.tsv"
 
 printf '%s\n' kindle-brief-owned-v1 > "$stage/payload/app/.kindle-brief-owned"
 printf '%s\n' kindle-brief-owned-v1 > "$stage/payload/kual/.kindle-brief-owned"

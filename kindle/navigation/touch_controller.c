@@ -320,6 +320,12 @@ static void emit_event(const char *event)
     (void)fflush(stdout);
 }
 
+static void emit_tap(int x, int y)
+{
+    (void)printf("TAP:%d:%d\n", x, y);
+    (void)fflush(stdout);
+}
+
 static void begin_touch(struct touch_state *touch, int64_t now)
 {
     memset(touch, 0, sizeof(*touch));
@@ -373,6 +379,8 @@ static bool finish_touch(const struct options *options, struct touch_state *touc
     }
     if (duration <= 3000 && absolute_x >= threshold && absolute_x > absolute_y * 2) {
         emit_event(delta_x < 0 ? "NEXT" : "PREVIOUS");
+    } else if (duration <= 1500 && absolute_x < 60 && absolute_y < 60) {
+        emit_tap(touch->current_x, touch->current_y);
     }
     return false;
 }

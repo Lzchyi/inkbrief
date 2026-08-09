@@ -23,6 +23,16 @@
           "name": "Diagnostics",
           "priority": 30,
           "action": "./diagnostics.sh"
+        },
+        {
+          "name": "Enable Article Links (Browser Risk)",
+          "priority": 40,
+          "action": "./enable-article-links.sh"
+        },
+        {
+          "name": "Disable Article Links",
+          "priority": 50,
+          "action": "./disable-article-links.sh"
         }
       ]
     }

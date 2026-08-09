@@ -91,6 +91,53 @@ kb_positive_integer() {
     return 0
 }
 
+kb_nonnegative_integer() {
+    case "$1" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    return 0
+}
+
+kb_valid_https_url() {
+    kb_url=$1
+    [ "${#kb_url}" -le 4096 ] || return 1
+    case "$kb_url" in
+        https://?*) ;;
+        *) return 1 ;;
+    esac
+    case "$kb_url" in
+        *[!A-Za-z0-9._~:/?#\[\]@!$\&\'\(\)*+,\;=%-]*) return 1 ;;
+    esac
+    kb_url_rest=${kb_url#https://}
+    kb_url_authority=${kb_url_rest%%[/?#]*}
+    case "$kb_url_authority" in
+        ''|*@*|*\[*|*\]*) return 1 ;;
+    esac
+    kb_url_host=${kb_url_authority%%:*}
+    kb_url_port=
+    if [ "$kb_url_host" != "$kb_url_authority" ]; then
+        kb_url_port=${kb_url_authority#*:}
+        case "$kb_url_port" in
+            ''|*[!0-9]*|*:* ) return 1 ;;
+        esac
+        [ "${#kb_url_port}" -le 5 ] && \
+            [ "$kb_url_port" -ge 1 ] && [ "$kb_url_port" -le 65535 ] || return 1
+    fi
+    [ "${#kb_url_host}" -le 253 ] || return 1
+    case "$kb_url_host" in
+        ''|.*|*.|*..*|-*|*-) return 1 ;;
+        *[!A-Za-z0-9.-]*) return 1 ;;
+    esac
+    return 0
+}
+
+kb_article_browser_enabled() {
+    kb_browser_marker=$KB_APP_ROOT/config/article-browser-enabled
+    [ -f "$kb_browser_marker" ] && [ ! -L "$kb_browser_marker" ] && \
+        [ "$(sed -n '1p' "$kb_browser_marker" 2>/dev/null || true)" = \
+            kindle-brief-internal-browser-risk-accepted-v1 ]
+}
+
 kb_owned_cache_dir() {
     kb_cache_dir=$1
     [ -d "$kb_cache_dir" ] && [ ! -L "$kb_cache_dir" ] && \

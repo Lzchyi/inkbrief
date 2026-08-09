@@ -61,6 +61,7 @@ class FallbackProvider(AIProvider):
                     "This was selected for recency, relevance, and source quality.",
                 ),
                 article_ids=cluster.article_ids,
+                article_urls=tuple(article.url for article in cluster.articles),
             )
             for cluster in clusters
         )

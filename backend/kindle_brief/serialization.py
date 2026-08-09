@@ -380,6 +380,7 @@ def brief_story_from_jsonable(value: object) -> Any:
     raw = _object(value, field_name="brief story")
     article_ids = _array(raw.get("article_ids"), field_name="brief story.article_ids")
     sources = _array(raw.get("sources", ()), field_name="brief story.sources")
+    article_urls = _array(raw.get("article_urls", ()), field_name="brief story.article_urls")
     return BriefStory(
         headline=repair_mojibake(_text(raw.get("headline"), field_name="brief story.headline")),
         summary=repair_mojibake(_text(raw.get("summary"), field_name="brief story.summary")),
@@ -390,6 +391,9 @@ def brief_story_from_jsonable(value: object) -> Any:
             _text(item, field_name="brief story.article_ids[]") for item in article_ids
         ),
         sources=tuple(_text(item, field_name="brief story.sources[]") for item in sources),
+        article_urls=tuple(
+            _text(item, field_name="brief story.article_urls[]") for item in article_urls
+        ),
     )
 
 

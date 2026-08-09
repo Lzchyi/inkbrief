@@ -22,9 +22,10 @@ assert a third-party licence. Circuit geometry retains its own attribution in
 ## Common layout contract
 
 All five pages share a centered date/time/lunar header and a visible HOME area.
-The page renderer also emits `hotspots.json` so tests can verify geometry
-without relying on visual judgment alone. Every page carries a high-contrast
-HOME target in the same top-left bounds. The Kindle display wrapper loads the
+The page renderer emits `hotspots.json` for host-side geometry checks and a
+bounded `links.tsv` containing only HTTPS news-row hitboxes for the Kindle.
+Every page carries a high-contrast HOME target in the same top-left bounds. The
+Kindle display wrapper loads the
 complete page without refreshing, then submits one update: flashing GC16 on
 launch and every fifth page change, or non-flashing GL16 in between. This
 requests low-flash 16-level updates while periodically clearing ghosting; the
@@ -43,8 +44,8 @@ Pages are fixed images, not HTML:
 - `headlines.png`
 
 This keeps the Kindle runtime small and produces exact typography and line
-wrapping. It also means links shown in story metadata are not interactive on
-the device.
+wrapping. News remains bitmap text, but the separately verified hitboxes let a
+short row tap open the corresponding original article in the Kindle browser.
 
 ## Preview
 
@@ -81,6 +82,7 @@ public/
                 ├── SHA256SUMS
                 ├── dashboard.tar.gz
                 ├── hotspots.json
+                ├── links.tsv
                 ├── snapshot.json
                 └── pages/
                     ├── home.png
@@ -91,7 +93,8 @@ public/
 ```
 
 The release ID is content-derived. The manifest records application version,
-generation time, device profile, dimensions, sizes, and page hashes.
+generation time, device profile, dimensions, sizes, and page hashes. The
+pointer separately records the exact byte size and SHA-256 of `links.tsv`.
 `dashboard.tar.gz` is a deterministic host-side bundle of the release files;
 the Kindle updater deliberately uses direct files and does not extract it. The
 pointer includes hashes for metadata the Kindle must trust before downloading
@@ -99,8 +102,8 @@ pages. Exact fields are versioned and covered by tests; consumers should reject
 an unsupported schema rather than guess.
 
 The updater downloads into a staging directory, permits exactly the five known
-page paths, validates every checksum and the KT5 model/profile, then atomically
-promotes the staged cache. A failed update leaves the current cache in place;
+page paths, validates every checksum, link-map row, and the KT5 model/profile,
+then atomically promotes the staged cache. A failed update leaves the current cache in place;
 the former current cache is retained as `previous` after a successful change.
 
 Hashes detect accidental corruption and mismatched files. Because the pointer

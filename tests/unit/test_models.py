@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from kindle_brief.models import (
+    BriefStory,
     DeviceProfile,
     HourlyForecast,
     PageArtifact,
@@ -11,6 +12,26 @@ from kindle_brief.models import (
     SourceStatus,
     WeatherSnapshot,
 )
+
+
+def test_brief_story_keeps_only_unique_safe_https_article_urls() -> None:
+    story = BriefStory(
+        headline="A grounded headline",
+        summary="A grounded summary.",
+        why_it_matters="It affects readers.",
+        article_ids=("article-1",),
+        article_urls=(
+            "https://example.com/story",
+            "http://example.com/insecure",
+            "javascript:alert(1)",
+            "https://user:secret@example.com/private",
+            "https://example.com/white space",
+            "https://example.com:0/invalid-port",
+            "https://example.com/story",
+        ),
+    )
+
+    assert story.article_urls == ("https://example.com/story",)
 
 
 def test_source_timestamp_is_normalized_to_utc_and_model_is_frozen() -> None:

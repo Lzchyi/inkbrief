@@ -16,6 +16,15 @@ During a live host build:
   excerpts, categories, source names, and publication times.
 - Astronomy and Chinese lunar date calculations remain local.
 
+When the user taps a news row on the Kindle, its stock browser contacts that
+publisher directly. The publisher can then observe the Kindle's IP address,
+TLS/browser metadata, cookies, and any interaction performed on the article.
+Article launching is disabled by default. Its firmware-internal Chromium path
+uses Amazon's single-process and no-sandbox flags inside the Kindle chroot, so a
+browser vulnerability in an untrusted publisher page could have greater impact
+than ordinary host browsing. Enable it only through the explicitly risk-labeled
+KUAL action, and disable it again when not needed.
+
 The backend never reads connected Kindle books, annotations, reading history,
 Calibre metadata, account data, or the device serial number. The detector uses
 only the non-unique model portion of the USB serial and does not print the full
@@ -59,6 +68,8 @@ RSS entries, API JSON, and model output are untrusted. Kindle Brief:
 - parses remote content into bounded immutable models;
 - strips feed markup and does not render remote HTML;
 - never runs article text as a command or template;
+- publishes only bounded, credential-free HTTPS article hitboxes, which the
+  device revalidates and passes as one quoted browser argument without `eval`;
 - accepts only schema-valid AI output referencing known article IDs;
 - uses safe relative paths and fixed page IDs in releases; and
 - stages and verifies downloads before cache promotion.
