@@ -1,6 +1,15 @@
 name: Refresh dashboard
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/refresh.yml"
+      - "assets/**"
+      - "backend/**"
+      - "config/**"
+      - "pyproject.toml"
   schedule:
     - cron: "17 0-22 * * *"
     - cron: "0 23 * * *"
