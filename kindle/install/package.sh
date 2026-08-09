@@ -81,6 +81,7 @@ if [ -n "$packaged_base_url" ]; then
     printf '%s\n' "$packaged_base_url" > "$stage/payload/app/config/base-url"
 fi
 cp "$KINDLE_DIR/VERSION" "$stage/payload/app/VERSION"
+cp "$KINDLE_DIR/launcher/Dashboard/config.xml" "$stage/payload/kual/config.xml"
 cp "$KINDLE_DIR/launcher/Dashboard/menu.json" "$stage/payload/kual/menu.json"
 cp "$KINDLE_DIR/launcher/Dashboard/start.sh" "$stage/payload/kual/start.sh"
 cp "$KINDLE_DIR/launcher/Dashboard/stop.sh" "$stage/payload/kual/stop.sh"

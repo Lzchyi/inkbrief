@@ -63,6 +63,10 @@ def _make_package(
     controller = app / "bin" / "touch-controller"
     controller.write_bytes(b"fake-armhf-controller-" + version.encode("ascii"))
     (app / "TOUCH_ABI").write_text("kindlehf-armv7-hardfloat-static\n", encoding="ascii")
+    (kual / "config.xml").write_text(
+        '<extension><menus><menu type="json">menu.json</menu></menus></extension>\n',
+        encoding="ascii",
+    )
     (kual / "menu.json").write_text('{"items": []}\n', encoding="ascii")
     (kual / "start.sh").write_text("#!/bin/sh\nexit 0\n", encoding="ascii")
     for page_id in ("home", "weather", "f1", "morning-brief", "headlines"):
@@ -273,6 +277,8 @@ def test_real_packager_output_installs_on_fake_mount(
         encoding="ascii"
     ) == "https://updates.example.test/kindle-brief\n"
     assert (mount / "extensions" / "Dashboard" / "menu.json").is_file()
+    config_xml = (mount / "extensions" / "Dashboard" / "config.xml").read_text(encoding="utf-8")
+    assert '<menu type="json" dynamic="true">menu.json</menu>' in config_xml
 
 
 @pytest.mark.parametrize(
@@ -1153,6 +1159,10 @@ def test_install_is_scoped_idempotent_and_keeps_previous_release(tmp_path: Path)
     orphan = mount / "kindle-brief" / "current" / "orphan"
     orphan.write_text("remove me", encoding="ascii")
     (mount / "extensions" / "Dashboard" / "menu.json").write_text("damaged", encoding="ascii")
+    (mount / "._kindle-brief").write_bytes(b"appledouble")
+    (mount / "kindle-brief" / "._current").write_bytes(b"appledouble")
+    (mount / "extensions" / "._Dashboard").write_bytes(b"appledouble")
+    (mount / "extensions" / "Dashboard" / "._menu.json").write_bytes(b"appledouble")
     repeated = _install(mount, first_package)
     assert repeated.returncode == 0, repeated.stderr
     assert not (mount / "kindle-brief" / "previous").exists()
@@ -1165,6 +1175,10 @@ def test_install_is_scoped_idempotent_and_keeps_previous_release(tmp_path: Path)
     assert (mount / "extensions" / "Dashboard" / "menu.json").read_bytes() == (
         first_package / "payload" / "kual" / "menu.json"
     ).read_bytes()
+    assert not list((mount / "kindle-brief").rglob("._*"))
+    assert not list((mount / "extensions" / "Dashboard").rglob("._*"))
+    assert not (mount / "._kindle-brief").exists()
+    assert not (mount / "extensions" / "._Dashboard").exists()
 
     upgraded = _install(mount, second_package)
     assert upgraded.returncode == 0, upgraded.stderr

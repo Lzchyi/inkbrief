@@ -206,6 +206,11 @@ if [ -f "$app_base/current/config/base-url" ] && \
     fi
 fi
 
+# macOS may materialize extended attributes as AppleDouble files on the
+# Kindle's FAT volume even with COPYFILE_DISABLE. They are never package
+# payload and must not enter the promoted application or KUAL entry.
+find "$app_stage" "$extension_stage" -type f -name '._*' -exec rm -f {} \;
+
 current_package_id=
 if [ -r "$app_base/current/PACKAGE_ID" ]; then
     IFS= read -r current_package_id < "$app_base/current/PACKAGE_ID" || true
@@ -253,6 +258,11 @@ app_repair_active=0
 if [ -d "$app_repair_backup" ]; then
     rm -rf "$app_repair_backup"
 fi
+
+# Directory creation and promotion on a macOS-mounted FAT volume can create
+# additional AppleDouble files outside the staging directories.
+find "$app_base" "$extension_root" -type f -name '._*' -exec rm -f {} \;
+rm -f "$mount_path/._kindle-brief" "$extension_parent/._Dashboard"
 
 trap - EXIT HUP INT TERM
 printf '%s\n' \
