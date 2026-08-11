@@ -273,7 +273,7 @@ rm -f "$mount_path/._kindle-brief" "$extension_parent/._Dashboard"
 
 trap - EXIT HUP INT TERM
 printf '%s\n' \
-    "Installed Kindle Brief package $package_id" \
+    "Installed InkBrief package $package_id" \
     "Model: KT5" \
     "Firmware: $firmware" \
     "Autostart: disabled"

@@ -1,6 +1,6 @@
-# Kindle runtime
+# InkBrief Kindle runtime
 
-This directory contains the optional, manually launched Kindle layer. It is
+This directory contains InkBrief's optional, manually launched Kindle layer. It is
 pinned to **KT5 / firmware 5.19.2.0.1**. It never installs a boot hook and its
 host tools own only these USB paths:
 

@@ -52,7 +52,7 @@ for page_id in home weather f1 morning-brief headlines; do
     fi
 done
 
-report="Kindle Brief $version
+report="InkBrief $version
 Firmware: $firmware
 Running: $running
 FBInk: $fbink_status

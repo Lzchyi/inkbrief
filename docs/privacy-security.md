@@ -1,6 +1,6 @@
 # Privacy and security
 
-Kindle Brief has no account system and does not read the Kindle library. It
+InkBrief has no account system and does not read the Kindle library. It
 still handles network data, location configuration, optional AI credentials,
 and a public static release, so its trust boundaries should be explicit.
 
@@ -11,7 +11,7 @@ During a live host build:
 - Open-Meteo receives latitude/longitude and forecast parameters.
 - Jolpica receives ordinary F1 endpoint requests.
 - Each enabled RSS publisher receives the runner IP, TLS metadata, and the
-  Kindle Brief user agent.
+  InkBrief user agent.
 - An enabled AI provider receives selected article IDs, headlines, bounded
   excerpts, categories, source names, and publication times.
 - Astronomy and Chinese lunar date calculations remain local.
@@ -62,7 +62,7 @@ reveal request context; review logs before sharing them.
 
 ## Untrusted content
 
-RSS entries, API JSON, and model output are untrusted. Kindle Brief:
+RSS entries, API JSON, and model output are untrusted. InkBrief:
 
 - uses safe YAML loading and strict known-key configuration;
 - parses remote content into bounded immutable models;

@@ -1,6 +1,6 @@
-# Kindle Brief
+# InkBrief
 
-Kindle Brief is a server-rendered, monochrome information dashboard for one
+InkBrief is a server-rendered, monochrome information dashboard for one
 explicitly supported device: the **Kindle 11th generation (2022), model code
 KT5, on firmware 5.19.2.0.1**. It generates five 1072×1448 PNG pages on a
 normal Python host, publishes content-addressed releases, and displays them on
@@ -35,7 +35,7 @@ flowchart LR
     Sky["Local astronomy and lunar date"] --> Actions
     Actions --> Pipeline["Normalize, filter, rank, and render"]
     Pipeline --> Host["Static HTTPS hosting"]
-    Host -->|"launch-time or manual checksummed update"| Kindle["Kindle Brief"]
+    Host -->|"launch-time or manual checksummed update"| Kindle["InkBrief"]
     Kindle -->|"tap news row"| Browser["Kindle browser article"]
     Kindle <-->|"HOME and failsafe return"| Library["Stock Library and reader"]
 ```
@@ -87,7 +87,7 @@ validated USB mass-storage mount. The installer writes only these owned paths:
 - `/mnt/us/extensions/Dashboard`
 
 It preserves `documents`, Calibre metadata, books, the stock UI, and unrelated
-extensions. Uninstall removes only paths carrying Kindle Brief ownership
+extensions. Uninstall removes only paths carrying InkBrief ownership
 markers; it does not remove the jailbreak.
 
 ## Documentation
@@ -102,6 +102,7 @@ markers; it does not remove the jailbreak.
 - [GitHub Pages publishing](docs/github-pages.md)
 - [Device install checklist](docs/device-install.md)
 - [Jailbreak and installation](docs/jailbreak-and-install.md)
+- [Firmware update safety](docs/firmware-safety.md)
 - [Calibre and library safety](docs/calibre.md)
 - [Rollback](docs/rollback.md)
 - [Recovery and uninstall](docs/recovery.md)
@@ -109,7 +110,20 @@ markers; it does not remove the jailbreak.
 - [Privacy and security](docs/privacy-security.md)
 - [Validation](docs/validation.md)
 
-Kindle Brief code and project-original assets are MIT-licensed. Bundled fonts
+InkBrief code and project-original assets are MIT-licensed. Bundled fonts
 and track geometry retain their own terms under `assets/`; project-authorized
 raster derivatives have a provenance record in `assets/PROVENANCE.md` without
 asserting a third-party licence.
+
+## Open source
+
+InkBrief is public, MIT-licensed software. The default dashboard works without
+an AI key; optional AI providers are BYOK and credentials must stay in local
+environment variables or GitHub Actions secrets, never in the repository.
+
+The stable internal Python module, CLI, and Kindle storage paths retain the
+`kindle_brief` / `kindle-brief` compatibility names so existing installations
+can upgrade safely. The product name and user-facing interface are InkBrief.
+
+Contributions are welcome through issues and pull requests. Before proposing a
+device-side change, read the security, recovery, and firmware-safety guidance.
